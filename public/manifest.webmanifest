@@ -1,0 +1,12 @@
+{
+  "name": "Requests, Please",
+  "short_name": "Requests",
+  "description": "A mobile-first WAF simulator game.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050a07",
+  "theme_color": "#050a07",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
