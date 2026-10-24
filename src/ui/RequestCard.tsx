@@ -4,6 +4,7 @@ import type { DifficultyConfig } from '../game/difficulty';
 import { decode, decodeJwt, ENCODING_LABEL } from '../game/encoding';
 import { smells } from '../game/hints';
 import { ENDPOINT_NOTES } from '../game/templates';
+import { t } from '../i18n';
 import type { Encoding, Field, HttpRequest } from '../game/types';
 
 interface Props {
@@ -26,11 +27,11 @@ export function Sparkline({ values, onTap }: { values: number[]; onTap?(): void 
   const pts = values.map((v, i) => `${(i / (values.length - 1)) * w},${h - (v / max) * (h - 2) - 1}`).join(' ');
   const hot = Math.max(...values) >= 10;
   return (
-    <button class={`spark ${hot ? 'hot' : ''}`} onClick={onTap} aria-label="Request rate">
+    <button class={`spark ${hot ? 'hot' : ''}`} onClick={onTap} aria-label={t('Request rate')}>
       <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
         <polyline points={pts} fill="none" stroke="currentColor" stroke-width="2" />
       </svg>
-      <span>{Math.max(...values)}/s</span>
+      <span>{t('{n}/s', { n: Math.max(...values) })}</span>
     </button>
   );
 }
@@ -91,7 +92,7 @@ export function RequestCard({ req, cfg, onCost, compact }: Props) {
     return (
       <span class="tokwrap">
         <button class={`tok ${cls} ${sel?.id === f.id ? 'sel' : ''} ${hint ? 'hint' : ''}`} onClick={() => select(f, p)}>
-          {(compact ? f.plain : f.raw) || '(empty)'}
+          {(compact ? f.plain : f.raw) || t('(empty)')}
         </button>
         {layers?.length ? <span class="decoded">↳ {layers.at(-1)}</span> : null}
       </span>
@@ -104,7 +105,7 @@ export function RequestCard({ req, cfg, onCost, compact }: Props) {
   return (
     <div class={`req ${compact ? 'compact' : ''}`}>
       <div class="req-from">
-        <span class="muted">from</span> {tok(req.ip, 'ip', 'ip')}
+        <span class="muted">{t('from')}</span> {tok(req.ip, 'ip', 'ip')}
         <Sparkline values={req.rate} onTap={compact ? undefined : () => select(req.ip, 'rate')} />
       </div>
       <div class="req-line">
@@ -130,8 +131,8 @@ export function RequestCard({ req, cfg, onCost, compact }: Props) {
       {sel && !compact && (
         <div class="tray" key={sel.id}>
           <div class="tray-head">
-            <span class="muted">{sel.kind === 'ip' ? 'source ip' : sel.key ? `${sel.kind} · ${sel.key}` : sel.kind}</span>
-            <button class="x" onClick={() => setSel(null)} aria-label="Close tools">
+            <span class="muted">{sel.kind === 'ip' ? t('source ip') : sel.key ? `${t(sel.kind)} · ${sel.key}` : t(sel.kind)}</span>
+            <button class="x" onClick={() => setSel(null)} aria-label={t('Close tools')}>
               ✕
             </button>
           </div>
@@ -151,7 +152,7 @@ export function RequestCard({ req, cfg, onCost, compact }: Props) {
                 ))}
                 {stacks[sel.id]?.length ? (
                   <button class="tool ghost" onClick={() => setStacks((s) => ({ ...s, [sel.id]: [] }))}>
-                    reset
+                    {t('reset')}
                   </button>
                 ) : null}
               </div>
@@ -162,27 +163,27 @@ export function RequestCard({ req, cfg, onCost, compact }: Props) {
             <dl class="info">
               <dt>ASN</dt>
               <dd>{req.ipInfo.asn}</dd>
-              <dt>Country</dt>
-              <dd>{req.ipInfo.country === 'FD' ? 'FD (Freedonia)' : req.ipInfo.country}</dd>
-              <dt>Reputation</dt>
-              <dd class={`rep rep-${req.ipInfo.reputation}`}>{req.ipInfo.reputation}</dd>
-              <dt>Seen this shift</dt>
+              <dt>{t('Country')}</dt>
+              <dd>{req.ipInfo.country === 'FD' ? t('FD (Freedonia)') : req.ipInfo.country}</dd>
+              <dt>{t('Reputation')}</dt>
+              <dd class={`rep rep-${req.ipInfo.reputation}`}>{t(req.ipInfo.reputation)}</dd>
+              <dt>{t('Seen this shift')}</dt>
               <dd>{req.ipInfo.seen}×</dd>
             </dl>
           )}
 
           {panel === 'rate' && (
             <dl class="info">
-              <dt>Peak</dt>
-              <dd>{Math.max(...req.rate)} req/s</dd>
-              <dt>Seen this shift</dt>
+              <dt>{t('Peak')}</dt>
+              <dd>{Math.max(...req.rate)} {t('req/s')}</dd>
+              <dt>{t('Seen this shift')}</dt>
               <dd>{req.ipInfo.seen}×</dd>
-              <dt>Normal human</dt>
-              <dd>0–2 req/s</dd>
+              <dt>{t('Normal human')}</dt>
+              <dd>0–2 {t('req/s')}</dd>
             </dl>
           )}
 
-          {panel === 'notes' && <p class="notes">{notes ?? 'No notes for this endpoint. Nobody documented it. Classic.'}</p>}
+          {panel === 'notes' && <p class="notes">{notes ? t(notes) : t('No notes for this endpoint. Nobody documented it. Classic.')}</p>}
 
           {panel === 'jwt' &&
             (jwt ? (
@@ -198,7 +199,7 @@ export function RequestCard({ req, cfg, onCost, compact }: Props) {
                 </pre>
               </div>
             ) : (
-              <p class="notes">Not a JWT.</p>
+              <p class="notes">{t('Not a JWT.')}</p>
             ))}
         </div>
       )}

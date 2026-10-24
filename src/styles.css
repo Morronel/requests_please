@@ -303,6 +303,7 @@ h1 {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel);
+  min-width: 0;
 }
 .codex-head {
   width: 100%;
@@ -532,6 +533,20 @@ h1 {
   color: var(--accent);
   font-weight: 700;
   font-size: 1rem;
+}
+.quota {
+  font-variant-numeric: tabular-nums;
+}
+.quota.met {
+  color: var(--accent);
+}
+.clock {
+  font-variant-numeric: tabular-nums;
+}
+.clock.last {
+  color: var(--bad);
+  font-weight: 700;
+  animation: blink 1s steps(1) infinite;
 }
 .streak.hot {
   color: var(--warn);

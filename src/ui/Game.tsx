@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { sfx } from '../audio';
 import { CLASSES } from '../game/codex';
 import { describeRule } from '../game/rules';
+import { explain as explainText, t } from '../i18n';
 import { Run, rankFor, type Outcome } from '../game/run';
 import type { AttackClass, Difficulty, Speaker, Verdict } from '../game/types';
 import { store } from '../storage';
@@ -24,7 +25,7 @@ interface Toast {
   text: string;
 }
 
-const WHO: Record<Speaker, string> = {
+export const WHO: Record<Speaker, string> = {
   chad: 'Chad (Growth)',
   ciso: 'CISO',
   intern: 'intern',
@@ -33,13 +34,20 @@ const WHO: Record<Speaker, string> = {
 };
 
 const STAMP_MS = 650;
+/** Longest real-time step the shift clock takes, so a backgrounded tab doesn't burn the shift. */
+const MAX_TICK_S = 0.5;
 const SWIPE_PX = 90;
 
 let toastSeq = 0;
 
+function mmss(seconds: number): string {
+  const s = Math.ceil(seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 function Pips({ label, value, max }: { label: string; value: number; max: number }) {
   return (
-    <span class={`pips ${value <= 1 ? 'low' : ''}`} aria-label={`${label} ${value} of ${max}`}>
+    <span class={`pips ${value <= 1 ? 'low' : ''}`} aria-label={t('{label} {value} of {max}', { label, value, max })}>
       <span class="pips-label">{label}</span>
       {Array.from({ length: max }, (_, i) => (
         <i class={i < value ? 'full' : ''} />
@@ -60,8 +68,6 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   const [, setVersion] = useState(0);
   const rerender = () => setVersion((v) => v + 1);
 
-  const [deadline, setDeadline] = useState(0);
-  const [now, setNow] = useState(() => performance.now());
   const [classifier, setClassifier] = useState(false);
   const [stamp, setStamp] = useState<{ verdict: Verdict; cls?: AttackClass } | null>(null);
   const [feedback, setFeedback] = useState<Outcome | null>(null);
@@ -71,7 +77,8 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   const [drag, setDrag] = useState(0);
   const [best, setBest] = useState(false);
   const stampTimer = useRef<number>();
-  const pausedLeft = useRef<number | null>(null);
+  const paused = useRef(false);
+  const requestLeft = useRef(0);
   const bonusLost = useRef(false);
   const dragStart = useRef<{ x: number; y: number; active: boolean } | null>(null);
 
@@ -90,19 +97,19 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
     for (const a of run.drainAutoBlocks()) {
       if (a.good) sfx.zap();
       else sfx.wrong();
-      const name = a.req.truth.cls ? CLASSES[a.req.truth.cls].short : 'request';
+      const name = a.req.truth.cls ? t(CLASSES[a.req.truth.cls].short) : t('request');
       pushToast(
         a.good
-          ? { tone: 'good', text: `${a.rule.id} auto-blocked ${name} (+${a.points})` }
-          : { tone: 'bad', text: `${a.rule.id} blocked a real customer: ${a.req.method.plain} ${a.req.path.plain} (${a.points})` },
+          ? { tone: 'good', text: t('{rule} auto-blocked {name} (+{points})', { rule: a.rule.id, name, points: a.points }) }
+          : { tone: 'bad', text: t('{rule} blocked a real customer: {request} ({points})', { rule: a.rule.id, request: `${a.req.method.plain} ${a.req.path.plain}`, points: a.points }) },
       );
     }
     for (const p of run.drainPings()) {
       sfx.ping();
-      pushToast({ tone: 'ping', who: WHO[p.who], text: p.text }, 5000);
+      pushToast({ tone: 'ping', who: t(WHO[p.who]), text: p.text }, 5000);
     }
     const fresh = store.unlock(run.seen);
-    if (fresh.length) pushToast({ tone: 'info', text: `Codex unlocked: ${fresh.map((c) => CLASSES[c].short).join(', ')}` });
+    if (fresh.length) pushToast({ tone: 'info', text: t('Codex unlocked: {names}', { names: fresh.map((c) => t(CLASSES[c].short)).join(', ') }) });
     if (run.phase === 'report') sfx.shiftEnd();
     if (run.phase === 'over') {
       sfx.gameOver();
@@ -118,11 +125,9 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   };
 
   const startClock = () => {
-    const t = performance.now();
-    setNow(t);
-    setDeadline(t + run.seconds * 1000);
     bonusLost.current = false;
-    pausedLeft.current = null;
+    paused.current = false;
+    requestLeft.current = run.seconds;
   };
 
   const afterAdvance = () => {
@@ -134,12 +139,10 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
     rerender();
   };
 
-  const timeLeftMs = () => (pausedLeft.current ?? deadline - now);
-  const fraction = Math.max(0, Math.min(1, timeLeftMs() / (run.seconds * 1000)));
+  const fraction = Math.max(0, Math.min(1, requestLeft.current / run.seconds));
 
   const commit = (verdict: Verdict, cls?: AttackClass, timedOut = false) => {
-    const frac = bonusLost.current || timedOut ? 0 : Math.max(0, (pausedLeft.current ?? deadline - performance.now()) / (run.seconds * 1000));
-    const out = run.judge(verdict, cls, frac, timedOut);
+    const out = run.judge(verdict, cls, bonusLost.current, timedOut);
     setFeedback(out);
     setExplain(out.kind !== 'tp' && out.kind !== 'tn');
     if (out.kind === 'fn' || out.kind === 'fp') {
@@ -154,7 +157,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
 
   const stage = (verdict: Verdict, cls?: AttackClass) => {
     if (stamp || run.phase !== 'request') return;
-    pausedLeft.current = Math.max(0, deadline - performance.now());
+    paused.current = true;
     setClassifier(false);
     setStamp({ verdict, cls });
     buzz(verdict === 'block' ? 40 : 15);
@@ -166,27 +169,38 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   const undo = () => {
     window.clearTimeout(stampTimer.current);
     sfx.undo();
-    const left = pausedLeft.current ?? 0;
-    pausedLeft.current = null;
+    paused.current = false;
     bonusLost.current = true;
-    const t = performance.now();
-    setNow(t);
-    setDeadline(t + left);
     setStamp(null);
   };
 
-  const cost = (seconds: number) => setDeadline((d) => d - seconds * 1000);
+  const cost = (seconds: number) => {
+    run.spend(seconds);
+    requestLeft.current -= seconds;
+    rerender();
+  };
 
-  // Request timer. Running out means the WAF fails open.
+  const commitRef = useRef(commit);
+  commitRef.current = commit;
+
+  // Two clocks, both running only while a request is on the desk and not mid-stamp, so
+  // briefings, rules and patches are free. The shift clock is fixed per shift; at zero, the
+  // request on the desk is the last one. The request timer is per card; running out fails open.
   useEffect(() => {
     if (run.phase !== 'request') return;
-    const h = window.setInterval(() => setNow(performance.now()), 100);
+    let last = performance.now();
+    const h = window.setInterval(() => {
+      const t = performance.now();
+      const dt = Math.min(MAX_TICK_S, (t - last) / 1000);
+      last = t;
+      if (paused.current || run.phase !== 'request') return;
+      run.spend(dt);
+      requestLeft.current -= dt;
+      if (requestLeft.current <= 0) commitRef.current('allow', undefined, true);
+      else rerender();
+    }, 100);
     return () => window.clearInterval(h);
-  }, [run.phase, deadline]);
-
-  useEffect(() => {
-    if (run.phase === 'request' && !stamp && pausedLeft.current === null && deadline && now >= deadline) commit('allow', undefined, true);
-  });
+  }, [run.phase]);
 
   useEffect(() => () => window.clearTimeout(stampTimer.current), []);
 
@@ -260,7 +274,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
           onDone={(rule) => {
             run.deployRule(rule);
             if (rule) sfx.deploy();
-            if (rule) pushToast({ tone: 'info', text: `Deployed: ${describeRule(rule)}` });
+            if (rule) pushToast({ tone: 'info', text: t('Deployed: {rule}', { rule: describeRule(rule) }) });
             afterAdvance();
           }}
         />
@@ -302,8 +316,8 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
     <main class="game">
       <header class="hud">
         <div class="hud-row">
-          <Pips label="INT" value={run.integrity} max={run.cfg.meter} />
-          <Pips label="UP" value={run.uptime} max={run.cfg.meter} />
+          <Pips label={t('INT')} value={run.integrity} max={run.cfg.meter} />
+          <Pips label={t('UP')} value={run.uptime} max={run.cfg.meter} />
           <RadioButton />
           <button class="hud-dir" onClick={() => setDrawer(!drawer)} aria-expanded={drawer}>
             § {run.directives.length}
@@ -311,15 +325,18 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
           </button>
         </div>
         <div class="hud-row small">
-          <span>
-            S{run.shift} · {run.index + 1}/{run.length}
+          <span class={run.lastCall ? 'clock last' : 'clock'}>
+            {t('S{shift}', { shift: run.shift })} · {run.lastCall ? t('LAST CALL') : mmss(run.clock)}
+          </span>
+          <span class={run.quotaDone >= run.quota ? 'quota met' : 'quota'} aria-label={t('Quota {done} of {quota}', { done: run.quotaDone, quota: run.quota })}>
+            ✓{Math.min(run.quotaDone, run.quota)}/{run.quota}
           </span>
           <span class="score">{run.score}</span>
           <span class={run.multiplier > 1 ? 'streak hot' : 'streak'}>
             {run.streak}🔥{run.multiplier > 1 ? ` ×${run.multiplier}` : ''}
           </span>
         </div>
-        <div class={`timer ${fraction < 0.3 ? 'low' : ''}`}>
+        <div class={`timer ${fraction < 0.25 ? 'low' : ''}`}>
           <i style={{ width: `${fraction * 100}%` }} />
         </div>
         <button class={`status ${feedback ? `fb-${feedback.kind}` : ''} ${explain ? 'open' : ''}`} onClick={() => setExplain(!explain)} disabled={!feedback}>
@@ -327,13 +344,16 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
             <>
               <span class="status-line">
                 <span class="prompt">&gt;</span> {feedback.title}
-                <b>{feedback.points > 0 ? `+${feedback.points}` : feedback.points}</b>
+                <b>
+                  {feedback.speedBonus > 0 && '⚡'}
+                  {feedback.points > 0 ? `+${feedback.points}` : feedback.points}
+                </b>
               </span>
-              {explain && <span class="status-why">{feedback.truth.explain}</span>}
+              {explain && <span class="status-why">{explainText(feedback.truth.explain)}</span>}
             </>
           ) : (
             <span class="status-line muted">
-              <span class="prompt">&gt;</span> waiting for verdict… (tap values to inspect)
+              <span class="prompt">&gt;</span> {t('waiting for verdict… (tap values to inspect)')}
             </span>
           )}
         </button>
@@ -341,17 +361,17 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
 
       {drawer && (
         <div class="drawer" onClick={() => setDrawer(false)}>
-          <h2 class="label">Directives</h2>
+          <h2 class="label">{t('Directives')}</h2>
           <ul class="directives">
             {run.directiveTexts().map((d) => (
               <li class={d.isNew ? 'new' : ''}>
-                <b>{d.title}.</b> {d.text}
+                <b>{t(d.title)}.</b> {t(d.text)}
               </li>
             ))}
           </ul>
           {run.rules.length > 0 && (
             <>
-              <h2 class="label">WAF rules</h2>
+              <h2 class="label">{t('WAF rules')}</h2>
               <ul class="directives">
                 {run.rules.map((r) => (
                   <li>
@@ -361,7 +381,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
               </ul>
             </>
           )}
-          <p class="muted">tap to close</p>
+          <p class="muted">{t('tap to close')}</p>
         </div>
       )}
 
@@ -386,7 +406,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
       >
         <div class="card" key={req.id} style={drag ? { transform: `translateX(${drag}px) rotate(${drag / 40}deg)` } : undefined}>
           <RequestCard req={req} cfg={run.cfg} onCost={cost} />
-          {stamp && <div class={`stamp stamp-${stamp.verdict}`}>{stamp.verdict === 'allow' ? '200 OK' : `403 ${stamp.cls ? CLASSES[stamp.cls].short : ''}`}</div>}
+          {stamp && <div class={`stamp stamp-${stamp.verdict}`}>{stamp.verdict === 'allow' ? '200 OK' : `403 ${stamp.cls ? t(CLASSES[stamp.cls].short) : ''}`}</div>}
         </div>
       </section>
 
@@ -394,8 +414,8 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
         <div class="sheet-backdrop" onClick={() => setClassifier(false)}>
           <div class="sheet" onClick={(e) => e.stopPropagation()}>
             <div class="sheet-head">
-              <b>Block as…</b>
-              <button class="x" onClick={() => setClassifier(false)} aria-label="Cancel">
+              <b>{t('Block as…')}</b>
+              <button class="x" onClick={() => setClassifier(false)} aria-label={t('Cancel')}>
                 ✕
               </button>
             </div>
@@ -403,7 +423,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
               {classes.map((c, i) => (
                 <button class={`cls cls-${c}`} onClick={() => stage('block', c)}>
                   <span class="cls-icon">{CLASSES[c].icon}</span>
-                  <span class="cls-name">{CLASSES[c].short}</span>
+                  <span class="cls-name">{t(CLASSES[c].short)}</span>
                   <span class="cls-key">{i < 9 ? i + 1 : i === 9 ? 0 : ''}</span>
                 </button>
               ))}
@@ -415,15 +435,15 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
       <footer class="verdicts">
         {stamp ? (
           <button class="btn verdict undo" onClick={undo}>
-            ↶ Undo
+            ↶ {t('Undo')}
           </button>
         ) : (
           <>
             <button class="btn verdict allow" onClick={() => stage('allow')}>
-              ALLOW
+              {t('ALLOW')}
             </button>
             <button class="btn verdict block" onClick={() => setClassifier(true)}>
-              BLOCK
+              {t('BLOCK')}
             </button>
           </>
         )}
