@@ -1,13 +1,13 @@
-<p align="center">
-  <a href="media/trailer.mp4"><img src="media/trailer.gif" width="480" alt="Requests, Please teaser: decode a payload, block the hackers, allow the customers, review patches, write WAF rules, get fired"></a>
-</p>
-<p align="center">
-  <a href="https://morronel.github.io/requests_please/"><b>▶ Play in your browser</b></a> · <a href="media/trailer.mp4">Watch the teaser with sound</a>
-</p>
+
+
+
 
 # Requests, Please
+https://github.com/user-attachments/assets/9e2116d5-452d-4478-8a6f-57392e9981a4
 
 A mobile-first WAF simulator. Papers, Please, but you're the web application firewall.
+
+<a href="https://morronel.github.io/requests_please/"><b>▶ Play in your browser</b></a>
 
 You're on night shift at Edge Node 7 after the board fired the ML firewall. HTTP requests land on your desk one by one. Tap values to decode them, look up IPs, read the endpoint notes, then **ALLOW** or **BLOCK** (and say which attack it was). Growth wants zero blocked customers, the CISO wants zero breaches, and two meters make sure you can't fully please either.
 
