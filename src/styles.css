@@ -471,6 +471,40 @@ h1 {
   display: block;
   font-size: 0.85rem;
 }
+.review-verdict {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.review-vuln {
+  border-color: var(--bad);
+}
+.review-safe {
+  border-color: var(--ok);
+}
+.review-result {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 0.9rem;
+}
+.review-result.ok,
+.review-result.bad {
+  color: var(--fg);
+}
+.review-result.ok {
+  border-color: var(--ok);
+}
+.review-result.ok b {
+  color: var(--ok);
+}
+.review-result.bad {
+  border-color: var(--bad);
+}
+.review-result.bad b {
+  color: var(--bad);
+}
 
 .stats {
   display: grid;

@@ -50,10 +50,18 @@ export interface RuleEvent {
   testSet: HttpRequest[];
 }
 
+/** verdict: vulnerable or not? class: which bug? fix: which PR? done: the outcome is on screen. */
+export type ReviewStep = 'verdict' | 'class' | 'fix' | 'done';
+
 export interface PatchEvent {
   def: PatchDef;
   /** Option order as shown, so the right answer isn't always first. */
   order: number[];
+  /** Classes offered on the "which bug" step, the right one among them. */
+  classChoices: AttackClass[];
+  step: ReviewStep;
+  saidVulnerable?: boolean;
+  pickedClass?: AttackClass;
   chosen?: PatchOption;
 }
 
@@ -88,6 +96,12 @@ export const RANKS: [number, string][] = [
 
 /** Points for a correct call, before the speed bonus and streak multiplier. */
 export const POINTS = { allow: 15, bait: 5, block: 30, speed: 15 };
+
+/** Code review: spotting the bug, naming it, shipping the fix, or rightly approving safe code. */
+export const REVIEW_POINTS = { spot: 15, cls: 15, fix: 50, safe: 50 };
+
+/** Classes a code review can be about. Scanners, stuffing and the like are not bugs in a snippet. */
+const REVIEWABLE = new Set(PATCHES.map((p) => p.cls));
 
 /** Shift-clock seconds an auto-blocked request takes, so a catch-all rule can't spin forever. */
 const AUTO_BLOCK_SECONDS = 1;
@@ -153,6 +167,8 @@ export class Run {
 
   rules: Rule[] = [];
   patched = new Set<string>();
+  /** Code reviews already shown this run, so the same snippet doesn't come back. */
+  private reviewed = new Set<string>();
 
   phase: Phase = 'briefing';
   current: HttpRequest | null = null;
@@ -262,14 +278,28 @@ export class Run {
     }
 
     if (this.cfg.patches) {
-      const open = PATCHES.filter((p) => this.cfg.classes.includes(p.cls) && !this.patched.has(`${p.cls}@${p.endpoint}`));
-      if (open.length) {
-        const def = this.rng.pick(open);
+      const def = this.pickReview();
+      if (def) {
+        this.reviewed.add(def.id);
         this.patchDue = true;
-        this.patchEvent = { def, order: this.rng.shuffle([0, 1, 2]) };
+        this.patchEvent = { def, order: this.rng.shuffle([0, 1, 2]), classChoices: this.classChoices(def.cls), step: 'verdict' };
       }
     }
     this.phase = 'briefing';
+  }
+
+  /** About one review in four is safe code, so "vulnerable" is never a free answer. */
+  private pickReview(): PatchDef | undefined {
+    const fresh = PATCHES.filter((p) => this.cfg.classes.includes(p.cls) && !this.reviewed.has(p.id));
+    const vuln = fresh.filter((p) => p.vulnerable && !this.patched.has(`${p.cls}@${p.endpoint}`));
+    const safe = fresh.filter((p) => !p.vulnerable);
+    if (safe.length && (!vuln.length || this.rng.chance(0.25))) return this.rng.pick(safe);
+    return vuln.length ? this.rng.pick(vuln) : undefined;
+  }
+
+  private classChoices(cls: AttackClass): AttackClass[] {
+    const others = this.rng.shuffle(this.cfg.classes.filter((c) => c !== cls && REVIEWABLE.has(c)));
+    return this.rng.shuffle([cls, ...others.slice(0, 3)]);
   }
 
   private testSet(cls: Exclude<AttackClass, 'policy'>): HttpRequest[] {
@@ -297,9 +327,10 @@ export class Run {
       }
       if (this.patchDue && this.clock <= this.cfg.shiftSeconds / 2) {
         this.patchDue = false;
-        // Make sure the patched endpoint gets tested soon after.
-        const cls = this.patchEvent!.def.cls as Exclude<AttackClass, 'policy'>;
-        for (const i of [2, 4]) this.plan.set(this.index + i, { kind: 'attack', cls });
+        // Make sure the reviewed endpoint gets tested soon after.
+        const def = this.patchEvent!.def;
+        const cls = def.cls as Exclude<AttackClass, 'policy'>;
+        if (def.vulnerable) for (const i of [2, 4]) this.plan.set(this.index + i, { kind: 'attack', cls });
         this.phase = 'patch';
         this.current = null;
         return;
@@ -492,15 +523,53 @@ export class Run {
     this.ping('system', tr('rule {rule} removed', { rule: id }));
   }
 
+  /** Step one of a code review: is this code vulnerable? Returns whether the call was right. */
+  reviewVerdict(vulnerable: boolean): boolean {
+    const ev = this.patchEvent;
+    if (!ev || ev.step !== 'verdict') throw new Error('no review verdict pending');
+    ev.saidVulnerable = vulnerable;
+    const right = vulnerable === ev.def.vulnerable;
+    if (!ev.def.vulnerable) {
+      ev.step = 'done';
+      if (right) {
+        this.addScore(REVIEW_POINTS.safe);
+        this.ping('intern', tr('LGTM from security! merging 🎉'));
+      } else {
+        this.ping('chad', tr('security blocked a perfectly fine PR. the release slips a day.'));
+      }
+    } else if (right) {
+      this.addScore(REVIEW_POINTS.spot);
+      ev.step = 'class';
+    } else {
+      ev.step = 'done';
+      this.ping('intern', tr('security said LGTM, shipping it 🚀'));
+      this.pending.push({ fireIn: 3, meter: 'integrity', who: 'pentest', text: tr('found {name} in the code you approved for {endpoint}. it was not subtle.', { name: tr(CLASSES[ev.def.cls].name), endpoint: ev.def.endpoint }) });
+    }
+    return right;
+  }
+
+  /** Step two: name the bug. A wrong name costs the points but the review goes on to the fix. */
+  reviewClass(cls: AttackClass): boolean {
+    const ev = this.patchEvent;
+    if (!ev || ev.step !== 'class') throw new Error('no review class pending');
+    ev.pickedClass = cls;
+    ev.step = 'fix';
+    const right = cls === ev.def.cls;
+    if (right) this.addScore(REVIEW_POINTS.cls);
+    return right;
+  }
+
+  /** Step three: approve one of the three PRs. */
   choosePatch(optionIndex: number): PatchOption {
     const ev = this.patchEvent;
-    if (!ev) throw new Error('no patch event');
+    if (!ev || ev.step !== 'fix') throw new Error('no patch choice pending');
     const opt = ev.def.options[optionIndex];
     ev.chosen = opt;
+    ev.step = 'done';
     const name = tr(CLASSES[ev.def.cls].short);
     if (opt.kind === 'fix') {
       this.patched.add(`${ev.def.cls}@${ev.def.endpoint}`);
-      this.addScore(50);
+      this.addScore(REVIEW_POINTS.fix);
       this.ping('system', tr('patch deployed to {endpoint}. {name} there is now harmless.', { endpoint: ev.def.endpoint, name }));
     } else if (opt.kind === 'bypassable') {
       this.ping('intern', tr('patch shipped!! 🚀 closing the ticket'));

@@ -334,8 +334,21 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
       return (
         <PatchScreen
           run={run}
+          onVerdict={(vulnerable) => {
+            const right = run.reviewVerdict(vulnerable);
+            if (right) sfx.correct();
+            else sfx.wrong();
+            rerender();
+          }}
+          onClass={(cls) => {
+            if (run.reviewClass(cls)) sfx.correct();
+            else sfx.wrong();
+            rerender();
+          }}
           onChoose={(i) => {
-            run.choosePatch(i);
+            const opt = run.choosePatch(i);
+            if (opt.kind === 'fix') sfx.deploy();
+            else sfx.wrong();
             rerender();
           }}
           onDone={() => {

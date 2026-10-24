@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { matchedFields, matchRule } from '../src/game/rules';
-import { POINTS, Run } from '../src/game/run';
+import { PATCHES } from '../src/game/patches';
+import { POINTS, REVIEW_POINTS, Run } from '../src/game/run';
+import { ENDPOINT } from '../src/game/templates';
 import type { Difficulty } from '../src/game/types';
 
 function perfectShift(run: Run, think = 5) {
@@ -10,8 +12,12 @@ function perfectShift(run: Run, think = 5) {
     if (run.phase === 'rule') run.deployRule(null);
     else if (run.phase === 'auto') run.ackAuto();
     else if (run.phase === 'patch') {
-      const i = run.patchEvent!.def.options.findIndex((o) => o.kind === 'fix');
-      run.choosePatch(i);
+      const def = run.patchEvent!.def;
+      run.reviewVerdict(def.vulnerable);
+      if (def.vulnerable) {
+        run.reviewClass(def.cls);
+        run.choosePatch(def.options.findIndex((o) => o.kind === 'fix'));
+      }
       run.finishPatch();
     } else {
       run.spend(think);
@@ -186,5 +192,101 @@ describe('run', () => {
     const req = run.current!;
     const any = req.query[0] ?? req.headers[1];
     expect(matchRule({ target: any.kind === 'query' ? 'query' : 'header', op: 'contains', value: any.plain.slice(0, 5) }, req)).toBe(true);
+  });
+});
+
+/** Plays requests perfectly until the mid-shift code review shows up. */
+function toReview(run: Run) {
+  run.startShift();
+  run.resume();
+  let guard = 0;
+  while (run.phase === 'request' && guard++ < 100) {
+    run.spend(10);
+    const t = run.current!.truth;
+    if (t.malicious && !t.harmless) run.judge('block', t.cls);
+    else run.judge('allow');
+  }
+  expect(run.phase).toBe('patch');
+  return run.patchEvent!;
+}
+
+function findSeed(want: (vulnerable: boolean) => boolean): Run {
+  for (let seed = 1; seed < 200; seed++) {
+    const run = new Run('hard', seed);
+    run.startShift();
+    if (run.patchEvent && want(run.patchEvent.def.vulnerable)) return new Run('hard', seed);
+  }
+  throw new Error('no seed');
+}
+
+describe('code review', () => {
+  it('every snippet is well formed', () => {
+    for (const p of PATCHES) {
+      if (p.vulnerable) {
+        expect(p.options, p.id).toHaveLength(3);
+        expect(p.options.filter((o) => o.kind === 'fix'), p.id).toHaveLength(1);
+        expect(p.endpoint, p.id).toBe(ENDPOINT[p.cls]);
+      } else {
+        expect(p.options, p.id).toHaveLength(0);
+      }
+    }
+    expect(new Set(PATCHES.map((p) => p.id)).size).toBe(PATCHES.length);
+    expect(PATCHES.some((p) => !p.vulnerable)).toBe(true);
+  });
+
+  it('spot, name and fix a vulnerable snippet', () => {
+    const run = findSeed((v) => v);
+    const ev = toReview(run);
+    expect(ev.classChoices).toContain(ev.def.cls);
+    expect(ev.classChoices).toHaveLength(4);
+    const before = run.score;
+    expect(run.reviewVerdict(true)).toBe(true);
+    expect(ev.step).toBe('class');
+    expect(run.reviewClass(ev.def.cls)).toBe(true);
+    expect(ev.step).toBe('fix');
+    run.choosePatch(ev.def.options.findIndex((o) => o.kind === 'fix'));
+    expect(ev.step).toBe('done');
+    expect(run.score - before).toBe(REVIEW_POINTS.spot + REVIEW_POINTS.cls + REVIEW_POINTS.fix);
+    expect(run.patched.has(`${ev.def.cls}@${ev.def.endpoint}`)).toBe(true);
+  });
+
+  it('a wrong class still goes on to the fix', () => {
+    const run = findSeed((v) => v);
+    const ev = toReview(run);
+    run.reviewVerdict(true);
+    const wrong = ev.classChoices.find((c) => c !== ev.def.cls)!;
+    expect(run.reviewClass(wrong)).toBe(false);
+    expect(ev.step).toBe('fix');
+  });
+
+  it('approving vulnerable code ends the review and costs integrity later', () => {
+    const run = findSeed((v) => v);
+    const ev = toReview(run);
+    const integrity = run.integrity;
+    expect(run.reviewVerdict(false)).toBe(false);
+    expect(ev.step).toBe('done');
+    run.finishPatch();
+    for (let i = 0; i < 6 && run.phase === 'request'; i++) {
+      const t = run.current!.truth;
+      if (t.malicious && !t.harmless) run.judge('block', t.cls);
+      else run.judge('allow');
+    }
+    expect(run.integrity).toBeLessThan(integrity);
+  });
+
+  it('safe code is approved for points and blocking it earns nothing', () => {
+    const a = findSeed((v) => !v);
+    const evA = toReview(a);
+    const before = a.score;
+    expect(a.reviewVerdict(false)).toBe(true);
+    expect(evA.step).toBe('done');
+    expect(a.score - before).toBe(REVIEW_POINTS.safe);
+
+    const b = findSeed((v) => !v);
+    const evB = toReview(b);
+    const beforeB = b.score;
+    expect(b.reviewVerdict(true)).toBe(false);
+    expect(evB.step).toBe('done');
+    expect(b.score).toBe(beforeB);
   });
 });

@@ -61,7 +61,7 @@ function allKeys(): string[] {
     ...Object.values(CLASSES).flatMap((c) => [c.short, c.name, c.tell, c.why, c.fix]),
     ...DIRECTIVES.flatMap((d) => [d.title, d.text]),
     ...Object.values(DIFFICULTIES).flatMap((d) => [d.title, d.tagline]),
-    ...PATCHES.flatMap((p) => [p.ticket, ...p.options.map((o) => o.why)]),
+    ...PATCHES.flatMap((p) => [p.title, p.explain, ...p.options.map((o) => o.why)]),
     ...Object.values(ENDPOINT_NOTES),
     ...RANKS.map(([, r]) => r),
     ...Object.values(INCIDENT_LINES),

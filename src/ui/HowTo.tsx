@@ -25,7 +25,7 @@ export function HowTo({ onDone, cta }: { onDone(): void; cta: string }) {
           <b>{t('Watch two meters.')}</b> {t('Integrity drops when an attack gets through. Uptime drops when you block real customers. Either at zero ends the run.')}
         </li>
         <li>
-          <b>{t('Write rules, ship patches.')}</b> {t('Waves of attacks let you deploy a WAF rule. Devs sometimes need you to pick the right code fix.')}
+          <b>{t('Write rules, ship patches.')}</b> {t('Waves of attacks let you deploy a WAF rule. Devs send code for review: say if it is vulnerable, name the bug, then approve the real fix.')}
         </li>
         <li>
           <b>{t('Make quota.')}</b>{' '}
