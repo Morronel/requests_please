@@ -554,4 +554,13 @@ export const UK: Record<string, string> = {
   "vol": "гучн",
   "sfx: {state}": "звуки: {state}",
   "Radio: {station}. Tap for {next}": "Радіо: {station}. Торкнись, щоб перемкнути на {next}",
+  "You clocked out. Shifts survived: {n}. The pager stays on the nightstand, face down.": "Ви пішли додому. Пережито змін: {n}. Пейджер лежить на тумбочці екраном донизу.",
+  "No runs yet. Clock in and set the bar.": "Ще жодної гри. Заступайте на зміну й задайте планку.",
+  "shift {shift} · {acc}% · {date}": "зміна {shift} · {acc}% · {date}",
+  "clocked out": "пішов додому",
+  "fired": "звільнений",
+  "Results": "Результати",
+  "Shifts survived": "Пережито змін",
+  "Results board: {mode}": "Таблиця результатів: {mode}",
+  "this run missed the top {n}": "ця гра не потрапила в топ-{n}",
 };

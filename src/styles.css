@@ -157,6 +157,10 @@ h1 {
   min-height: 60px;
   font-size: 1.1rem;
 }
+.btn.wide {
+  width: 100%;
+  margin-top: 10px;
+}
 .btn.primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -532,6 +536,58 @@ h1 {
   padding: 4px 14px;
   transform: rotate(-6deg);
   margin: 24px 0;
+}
+
+.big-stamp.out {
+  color: var(--ok);
+  border-color: var(--ok);
+}
+
+.board {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.board-row {
+  display: grid;
+  grid-template-columns: 2ch 1fr auto;
+  align-items: center;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+.board-row.you {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.board-pos {
+  color: var(--dim);
+  font-weight: 700;
+}
+.board-main {
+  min-width: 0;
+}
+.board-meta {
+  display: block;
+  color: var(--dim);
+  font-size: 0.8rem;
+}
+.board-end {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+.board-end.ok {
+  color: var(--ok);
+}
+.board-end.bad {
+  color: var(--bad);
+}
+.results .settings {
+  margin-bottom: 12px;
 }
 
 /* -------------------------------------------------------------------- game */

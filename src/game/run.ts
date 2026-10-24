@@ -194,6 +194,10 @@ export class Run {
   stats = emptyStats();
   seen = new Set<AttackClass>();
   overReason = '';
+  /** True when the player went home on their own instead of being fired. */
+  clockedOut = false;
+  /** Shifts that ended in a postmortem rather than a firing. */
+  shiftsCleared = 0;
 
   constructor(difficulty: Difficulty, seed: number) {
     this.cfg = DIFFICULTIES[difficulty];
@@ -491,8 +495,18 @@ export class Run {
     if (this.phase !== 'over' && this.quotaDone < this.quota) {
       this.gameOver(tr('Quota missed: {done} of {quota} correct calls. HR has scheduled a "quick chat".', { done: this.quotaDone, quota: this.quota }));
     }
-    if (this.phase !== 'over') this.phase = 'report';
+    if (this.phase !== 'over') {
+      this.phase = 'report';
+      this.shiftsCleared++;
+    }
     this.current = null;
+  }
+
+  /** Go home between shifts: the run ends on the player's terms and the score stands. */
+  clockOut(): void {
+    if (this.phase !== 'report' && this.phase !== 'briefing') throw new Error('can only clock out between shifts');
+    this.clockedOut = true;
+    this.gameOver(tr('You clocked out. Shifts survived: {n}. The pager stays on the nightstand, face down.', { n: this.shiftsCleared }));
   }
 
   deployRule(rule: Omit<Rule, 'id' | 'caught' | 'collateral'> | null): void {
