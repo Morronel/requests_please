@@ -1088,3 +1088,100 @@ h1 {
     border-right: 1px solid var(--line);
   }
 }
+
+/* ------------------------------------------------------------------ radio */
+
+.radio {
+  margin-top: 20px;
+}
+.radio-stations,
+.radio-mix {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.radio-now {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  margin: 8px 0;
+  font-size: 0.85rem;
+  color: var(--dim);
+}
+.radio-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.radio-eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+.radio-eq i {
+  width: 3px;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: bottom;
+  animation: eq 0.9s ease-in-out infinite alternate;
+}
+.radio-eq i:nth-child(2) {
+  animation-delay: -0.3s;
+}
+.radio-eq i:nth-child(3) {
+  animation-delay: -0.6s;
+}
+@keyframes eq {
+  from {
+    transform: scaleY(0.25);
+  }
+}
+.radio-vol {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 160px;
+  min-height: 44px;
+  color: var(--dim);
+  font-size: 0.85rem;
+}
+.radio-vol input {
+  flex: 1;
+  accent-color: var(--accent);
+  min-height: 32px;
+}
+.hud-radio {
+  min-height: 40px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--accent);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.hud-radio.off {
+  color: var(--dim);
+  text-decoration: line-through;
+}
+/* Phones: the HUD only has room for the note. */
+@media (max-width: 420px) {
+  .hud-radio {
+    min-width: 40px;
+    padding: 4px 8px;
+    font-size: 1rem;
+  }
+  .hud-radio-name {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .radio-eq i {
+    animation: none;
+  }
+}

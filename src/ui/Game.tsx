@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
+import { sfx } from '../audio';
 import { CLASSES } from '../game/codex';
 import { describeRule } from '../game/rules';
 import { explain as explainText, t } from '../i18n';
@@ -6,6 +7,7 @@ import { Run, rankFor, type Outcome } from '../game/run';
 import type { AttackClass, Difficulty, Speaker, Verdict } from '../game/types';
 import { store } from '../storage';
 import { Briefing, GameOver, PatchScreen, RuleEditor, ShiftReport } from './Events';
+import { RadioButton } from './Radio';
 import { RequestCard } from './RequestCard';
 
 interface Props {
@@ -93,6 +95,8 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   /** Pull pings, auto-blocks and codex unlocks out of the run into toasts. */
   const flush = () => {
     for (const a of run.drainAutoBlocks()) {
+      if (a.good) sfx.zap();
+      else sfx.wrong();
       const name = a.req.truth.cls ? t(CLASSES[a.req.truth.cls].short) : t('request');
       pushToast(
         a.good
@@ -100,10 +104,15 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
           : { tone: 'bad', text: t('{rule} blocked a real customer: {request} ({points})', { rule: a.rule.id, request: `${a.req.method.plain} ${a.req.path.plain}`, points: a.points }) },
       );
     }
-    for (const p of run.drainPings()) pushToast({ tone: 'ping', who: t(WHO[p.who]), text: p.text }, 5000);
+    for (const p of run.drainPings()) {
+      sfx.ping();
+      pushToast({ tone: 'ping', who: t(WHO[p.who]), text: p.text }, 5000);
+    }
     const fresh = store.unlock(run.seen);
     if (fresh.length) pushToast({ tone: 'info', text: t('Codex unlocked: {names}', { names: fresh.map((c) => t(CLASSES[c].short)).join(', ') }) });
+    if (run.phase === 'report') sfx.shiftEnd();
     if (run.phase === 'over') {
+      sfx.gameOver();
       setBest(
         store.submitScore(difficulty, {
           score: run.score,
@@ -136,8 +145,13 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
     const out = run.judge(verdict, cls, bonusLost.current, timedOut);
     setFeedback(out);
     setExplain(out.kind !== 'tp' && out.kind !== 'tn');
-    if (out.kind === 'fn' || out.kind === 'fp') buzz([60, 60, 60]);
-    else buzz(25);
+    if (out.kind === 'fn' || out.kind === 'fp') {
+      buzz([60, 60, 60]);
+      sfx.wrong();
+    } else {
+      buzz(25);
+      sfx.correct();
+    }
     afterAdvance();
   };
 
@@ -147,11 +161,14 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
     setClassifier(false);
     setStamp({ verdict, cls });
     buzz(verdict === 'block' ? 40 : 15);
+    if (verdict === 'block') sfx.block();
+    else sfx.allow();
     stampTimer.current = window.setTimeout(() => commit(verdict, cls), STAMP_MS);
   };
 
   const undo = () => {
     window.clearTimeout(stampTimer.current);
+    sfx.undo();
     paused.current = false;
     bonusLost.current = true;
     setStamp(null);
@@ -186,6 +203,10 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   }, [run.phase]);
 
   useEffect(() => () => window.clearTimeout(stampTimer.current), []);
+
+  useEffect(() => {
+    if (classifier) sfx.sheet();
+  }, [classifier]);
 
   // Keyboard: A allow, B block, 1-9/0 classes, U undo, Esc closes.
   useEffect(() => {
@@ -240,6 +261,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
           run={run}
           onQuit={onExit}
           onStart={() => {
+            sfx.shiftStart();
             run.resume();
             afterAdvance();
           }}
@@ -251,6 +273,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
           run={run}
           onDone={(rule) => {
             run.deployRule(rule);
+            if (rule) sfx.deploy();
             if (rule) pushToast({ tone: 'info', text: t('Deployed: {rule}', { rule: describeRule(rule) }) });
             afterAdvance();
           }}
@@ -295,6 +318,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
         <div class="hud-row">
           <Pips label={t('INT')} value={run.integrity} max={run.cfg.meter} />
           <Pips label={t('UP')} value={run.uptime} max={run.cfg.meter} />
+          <RadioButton />
           <button class="hud-dir" onClick={() => setDrawer(!drawer)} aria-expanded={drawer}>
             § {run.directives.length}
             {run.rules.length ? ` · R${run.rules.length}` : ''}

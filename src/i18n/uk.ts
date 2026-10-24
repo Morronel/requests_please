@@ -462,4 +462,11 @@ export const UK: Record<string, string> = {
   "Upload way over the 10 MB limit.": "Завантаження далеко за межею в 10 МБ.",
   "Upload under 10 MB. Allowed.": "Завантаження до 10 МБ. Дозволено.",
   "/api/v2 call without an X-Api-Key.": "Виклик /api/v2 без X-Api-Key.",
+  "Radio": "Радіо",
+  "tap anywhere to tune in": "торкнись будь-де, щоб налаштуватися",
+  "Next track": "Наступний трек",
+  "radio silence": "радіотиша",
+  "vol": "гучн",
+  "sfx: {state}": "звуки: {state}",
+  "Radio: {station}. Tap for {next}": "Радіо: {station}. Торкнись, щоб перемкнути на {next}",
 };
