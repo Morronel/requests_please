@@ -606,6 +606,21 @@ h1 {
 .timer.low i {
   background: var(--bad);
 }
+/* A rule hit drains on its own; holding it freezes the bar. */
+.timer.auto i {
+  width: 100%;
+  transition: none;
+  animation: drain linear forwards;
+}
+.timer.auto.held i {
+  animation-play-state: paused;
+  opacity: 0.4;
+}
+@keyframes drain {
+  to {
+    width: 0;
+  }
+}
 
 .drawer {
   position: absolute;
@@ -752,6 +767,74 @@ h1 {
 }
 .stamp-allow {
   color: var(--ok);
+}
+.stamp small {
+  display: block;
+  font-size: 0.9rem;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.stamp.stamp-collateral {
+  color: var(--warn);
+}
+
+/* ------------------------------------------------------------ rule hit */
+
+.card.auto-good {
+  border-color: var(--ok);
+  box-shadow: 0 0 0 1px var(--ok), 0 0 18px var(--glow);
+}
+.card.auto-bad {
+  border-color: var(--warn);
+  box-shadow: 0 0 0 1px var(--warn);
+  animation: slidein 0.18s ease-out, jolt 0.3s 0.2s;
+}
+@keyframes jolt {
+  25% {
+    transform: translateX(-6px);
+  }
+  75% {
+    transform: translateX(6px);
+  }
+}
+.rule-fired {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: baseline;
+  margin: -4px 0 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  font-size: 0.82rem;
+  animation: drop 0.18s ease-out;
+}
+.auto-good .rule-fired b {
+  color: var(--ok);
+}
+.auto-bad .rule-fired b {
+  color: var(--warn);
+}
+.rule-fired .muted {
+  flex-basis: 100%;
+  font-size: 0.75rem;
+}
+.tok.hit,
+.spark.hit {
+  background: var(--bad);
+  color: var(--bg);
+  text-shadow: none;
+  animation: hitflash 0.5s 0.15s 2;
+}
+.auto-bad .tok.hit,
+.auto-bad .spark.hit {
+  background: var(--warn);
+}
+@keyframes hitflash {
+  50% {
+    filter: brightness(1.8);
+  }
 }
 .stamp-block {
   color: var(--bad);
@@ -1067,6 +1150,13 @@ h1 {
   grid-column: 1 / -1;
   color: var(--warn);
   border-color: var(--warn);
+}
+.verdict.next {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.verdict.next:only-child {
+  grid-column: 1 / -1;
 }
 
 @media (prefers-reduced-motion: reduce) {

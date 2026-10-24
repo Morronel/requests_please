@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchRule } from '../src/game/rules';
+import { matchedFields, matchRule } from '../src/game/rules';
 import { POINTS, Run } from '../src/game/run';
 import type { Difficulty } from '../src/game/types';
 
@@ -8,6 +8,7 @@ function perfectShift(run: Run, think = 5) {
   let guard = 0;
   while (run.phase !== 'report' && run.phase !== 'over' && guard++ < 500) {
     if (run.phase === 'rule') run.deployRule(null);
+    else if (run.phase === 'auto') run.ackAuto();
     else if (run.phase === 'patch') {
       const i = run.patchEvent!.def.options.findIndex((o) => o.kind === 'fix');
       run.choosePatch(i);
@@ -54,14 +55,34 @@ describe('run', () => {
     expect(run.integrity).toBe(0);
   });
 
-  it('a deployed rule auto-blocks matching requests', () => {
+  it('a deployed rule fires on a matching request while it is on the desk', () => {
     const run = new Run('easy', 5);
     run.startShift();
     run.rules.push({ id: 'R1', target: 'path', op: 'startsWith', value: '/', caught: 0, collateral: 0 });
     run.resume();
+    expect(run.phase).toBe('auto');
+    const hit = run.autoHit!;
+    expect(hit.req).toBe(run.current);
+    expect(hit.rule.id).toBe('R1');
+    expect(hit.good).toBe(hit.req.truth.malicious);
+    expect(matchedFields(hit.rule, hit.req)).toEqual([hit.req.path.id]);
+    expect(run.score).toBe(hit.points);
     // A catch-all rule burns through the shift clock (or uptime) instead of looping forever.
+    let guard = 0;
+    while (run.phase === 'auto' && guard++ < 1000) run.ackAuto();
     expect(['report', 'over']).toContain(run.phase);
+    expect(run.autoHit).toBeUndefined();
     expect(run.total.autoCaught + run.total.autoCollateral).toBe(run.index);
+  });
+
+  it('removing a rule stops it firing', () => {
+    const run = new Run('easy', 5);
+    run.startShift();
+    run.rules.push({ id: 'R1', target: 'path', op: 'startsWith', value: '/', caught: 0, collateral: 0 });
+    run.resume();
+    run.removeRule('R1');
+    run.ackAuto();
+    expect(run.phase).toBe('request');
   });
 
   it('a shift lasts a fixed clock, the request on the desk at zero is the last one, and missing quota ends the run', () => {
