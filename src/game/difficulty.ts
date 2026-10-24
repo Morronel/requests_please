@@ -14,6 +14,12 @@ export interface DifficultyConfig {
   baitShare: number;
   /** Fixed length of every shift on the clock. */
   shiftSeconds: number;
+  /** Per-request timer on shift 1; it shrinks 5% per shift down to the floor. Running out fails open. */
+  secondsStart: number;
+  secondsFloor: number;
+  /** Correct calls needed on shift 1 to keep the job; +1 per shift, up to `quotaMax`. */
+  quota: number;
+  quotaMax: number;
   /** A verdict this fast or faster earns the full speed bonus; slower ones earn less, never a penalty. */
   parSeconds: number;
   maxDirectives: number;
@@ -42,6 +48,10 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
     attackShare: 0.45,
     baitShare: 0.12,
     shiftSeconds: 180,
+    secondsStart: 70,
+    secondsFloor: 42,
+    quota: 8,
+    quotaMax: 14,
     parSeconds: 12,
     maxDirectives: 3,
     ruleSlots: 3,
@@ -61,6 +71,10 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
     attackShare: 0.5,
     baitShare: 0.25,
     shiftSeconds: 180,
+    secondsStart: 52,
+    secondsFloor: 28,
+    quota: 10,
+    quotaMax: 16,
     parSeconds: 9,
     maxDirectives: 5,
     ruleSlots: 3,
@@ -80,6 +94,10 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
     attackShare: 0.5,
     baitShare: 0.4,
     shiftSeconds: 180,
+    secondsStart: 42,
+    secondsFloor: 18,
+    quota: 12,
+    quotaMax: 18,
     parSeconds: 7,
     maxDirectives: 8,
     ruleSlots: 2,
@@ -90,3 +108,12 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
     reputationTells: 0.2,
   },
 };
+
+/** Per-request timer, about 3.5x the original pace. Shrinks about 5% per shift until the floor. */
+export function secondsFor(cfg: DifficultyConfig, shift: number): number {
+  return Math.max(cfg.secondsFloor, Math.round(cfg.secondsStart * Math.pow(0.95, shift - 1)));
+}
+
+export function quotaFor(cfg: DifficultyConfig, shift: number): number {
+  return Math.min(cfg.quotaMax, cfg.quota + shift - 1);
+}

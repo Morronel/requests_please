@@ -1,5 +1,5 @@
 import { CLASSES } from './codex';
-import { DIFFICULTIES, type DifficultyConfig } from './difficulty';
+import { DIFFICULTIES, quotaFor, secondsFor, type DifficultyConfig } from './difficulty';
 import { directiveById } from './directives';
 import { directiveOrder, generateRequest, type GenContext, type GenOptions } from './generator';
 import { PATCHES, type PatchDef, type PatchOption } from './patches';
@@ -20,6 +20,7 @@ export interface Outcome {
   truth: Truth;
   /** Speed bonus included in `points`, before the streak multiplier. */
   speedBonus: number;
+  timedOut: boolean;
 }
 
 export interface AutoBlock {
@@ -189,6 +190,21 @@ export class Run {
     this.clock = Math.max(0, this.clock - seconds);
   }
 
+  /** Per-request timer for this shift. */
+  get seconds(): number {
+    return secondsFor(this.cfg, this.shift);
+  }
+
+  /** Correct calls needed to finish this shift. */
+  get quota(): number {
+    return quotaFor(this.cfg, this.shift);
+  }
+
+  /** Progress toward the quota: your correct calls plus your rules' catches. */
+  get quotaDone(): number {
+    return this.stats.correct + this.stats.autoCaught;
+  }
+
   get lastCall(): boolean {
     return this.clock <= 0;
   }
@@ -330,14 +346,15 @@ export class Run {
   /**
    * Player verdict on the current request. Correct calls earn a speed bonus that
    * fades from full at `parSeconds` to nothing at twice that; `noBonus` skips it (after an undo).
+   * `timedOut` means the request timer ran out and the WAF failed open.
    */
-  judge(verdict: Verdict, picked?: AttackClass, noBonus = false): Outcome {
+  judge(verdict: Verdict, picked?: AttackClass, noBonus = false, timedOut = false): Outcome {
     const req = this.current;
     if (!req || this.phase !== 'request') throw new Error('no request to judge');
     const t = req.truth;
     const took = this.dealtAt - this.clock;
     const par = this.cfg.parSeconds;
-    const timeBonus = noBonus ? 0 : Math.round(POINTS.speed * Math.max(0, Math.min(1, 2 - took / par)));
+    const timeBonus = noBonus || timedOut ? 0 : Math.round(POINTS.speed * Math.max(0, Math.min(1, 2 - took / par)));
     let speedBonus = 0;
     const cls = t.cls ? CLASSES[t.cls].short : '';
     let kind: OutcomeKind;
@@ -353,7 +370,7 @@ export class Run {
       } else {
         kind = 'fn';
         points = -30;
-        title = `Missed: ${cls} got through`;
+        title = timedOut ? `Timed out: WAF failed open, ${cls} got through` : `Missed: ${cls} got through`;
         const inc = `INC-${this.rng.int(1000, 9999)}: ${INCIDENT_LINES[t.cls!] ?? 'something bad happened'}`;
         this.stats.incidents.push(inc);
         this.total.incidents.push(inc);
@@ -397,7 +414,7 @@ export class Run {
     this.current = null;
     this.tick();
     this.advance();
-    return { kind, verdict, picked, points, title, truth: t, speedBonus };
+    return { kind, verdict, picked, points, title, truth: t, speedBonus, timedOut };
   }
 
   /** Count down delayed consequences and fire the due ones. */
@@ -427,6 +444,9 @@ export class Run {
     const due = this.pending;
     this.pending = [];
     due.forEach((p) => this.fire(p));
+    if (this.phase !== 'over' && this.quotaDone < this.quota) {
+      this.gameOver(`Quota missed: ${this.quotaDone} of ${this.quota} correct calls. HR has scheduled a "quick chat".`);
+    }
     if (this.phase !== 'over') this.phase = 'report';
     this.current = null;
   }

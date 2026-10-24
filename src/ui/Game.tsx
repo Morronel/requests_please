@@ -75,6 +75,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   const [best, setBest] = useState(false);
   const stampTimer = useRef<number>();
   const paused = useRef(false);
+  const requestLeft = useRef(0);
   const bonusLost = useRef(false);
   const dragStart = useRef<{ x: number; y: number; active: boolean } | null>(null);
 
@@ -116,6 +117,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   const startClock = () => {
     bonusLost.current = false;
     paused.current = false;
+    requestLeft.current = run.seconds;
   };
 
   const afterAdvance = () => {
@@ -127,10 +129,10 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
     rerender();
   };
 
-  const fraction = Math.max(0, Math.min(1, run.clock / run.cfg.shiftSeconds));
+  const fraction = Math.max(0, Math.min(1, requestLeft.current / run.seconds));
 
-  const commit = (verdict: Verdict, cls?: AttackClass) => {
-    const out = run.judge(verdict, cls, bonusLost.current);
+  const commit = (verdict: Verdict, cls?: AttackClass, timedOut = false) => {
+    const out = run.judge(verdict, cls, bonusLost.current, timedOut);
     setFeedback(out);
     setExplain(out.kind !== 'tp' && out.kind !== 'tn');
     if (out.kind === 'fn' || out.kind === 'fp') buzz([60, 60, 60]);
@@ -156,11 +158,16 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
 
   const cost = (seconds: number) => {
     run.spend(seconds);
+    requestLeft.current -= seconds;
     rerender();
   };
 
-  // Shift clock. It only runs while a request is on the desk and not mid-stamp, so
-  // briefings, rules and patches are free. At zero, the request on the desk is the last one.
+  const commitRef = useRef(commit);
+  commitRef.current = commit;
+
+  // Two clocks, both running only while a request is on the desk and not mid-stamp, so
+  // briefings, rules and patches are free. The shift clock is fixed per shift; at zero, the
+  // request on the desk is the last one. The request timer is per card; running out fails open.
   useEffect(() => {
     if (run.phase !== 'request') return;
     let last = performance.now();
@@ -168,9 +175,11 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
       const t = performance.now();
       const dt = Math.min(MAX_TICK_S, (t - last) / 1000);
       last = t;
-      if (paused.current || run.lastCall) return;
+      if (paused.current || run.phase !== 'request') return;
       run.spend(dt);
-      rerender();
+      requestLeft.current -= dt;
+      if (requestLeft.current <= 0) commitRef.current('allow', undefined, true);
+      else rerender();
     }, 100);
     return () => window.clearInterval(h);
   }, [run.phase]);
@@ -294,12 +303,15 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
           <span class={run.lastCall ? 'clock last' : 'clock'}>
             S{run.shift} · {run.lastCall ? 'LAST CALL' : mmss(run.clock)}
           </span>
+          <span class={run.quotaDone >= run.quota ? 'quota met' : 'quota'} aria-label={`Quota ${run.quotaDone} of ${run.quota}`}>
+            ✓{Math.min(run.quotaDone, run.quota)}/{run.quota}
+          </span>
           <span class="score">{run.score}</span>
           <span class={run.multiplier > 1 ? 'streak hot' : 'streak'}>
             {run.streak}🔥{run.multiplier > 1 ? ` ×${run.multiplier}` : ''}
           </span>
         </div>
-        <div class={`timer ${fraction < 0.15 ? 'low' : ''}`}>
+        <div class={`timer ${fraction < 0.25 ? 'low' : ''}`}>
           <i style={{ width: `${fraction * 100}%` }} />
         </div>
         <button class={`status ${feedback ? `fb-${feedback.kind}` : ''} ${explain ? 'open' : ''}`} onClick={() => setExplain(!explain)} disabled={!feedback}>

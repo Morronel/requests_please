@@ -64,7 +64,7 @@ describe('run', () => {
     expect(run.total.autoCaught + run.total.autoCollateral).toBe(run.index);
   });
 
-  it('a shift lasts a fixed clock, and the request on the desk at zero is the last one', () => {
+  it('a shift lasts a fixed clock, the request on the desk at zero is the last one, and missing quota ends the run', () => {
     const run = new Run('medium', 42);
     run.startShift();
     expect(run.clock).toBe(180);
@@ -73,8 +73,10 @@ describe('run', () => {
     expect(run.lastCall).toBe(true);
     expect(run.phase).toBe('request');
     run.judge('allow');
-    expect(run.phase).toBe('report');
     expect(run.stats.processed).toBe(1);
+    expect(run.quotaDone).toBeLessThan(run.quota);
+    expect(run.phase).toBe('over');
+    expect(run.overReason).toMatch(/Quota missed/);
   });
 
   it('faster players process more and score higher', () => {
@@ -85,11 +87,35 @@ describe('run', () => {
       return run.stats;
     };
     const fast = shiftScore(3);
-    const slow = shiftScore(30);
+    const slow = shiftScore(14);
     expect(fast.processed).toBeGreaterThan(slow.processed);
     expect(fast.score).toBeGreaterThan(slow.score);
-    // Being slow never loses points.
+    // Slower but still within quota is fine, just a lower score.
     expect(slow.score).toBeGreaterThan(0);
+    expect(slow.correct).toBeGreaterThanOrEqual(8);
+  });
+
+  it('a timed-out request fails open and earns no speed bonus', () => {
+    for (let s = 1; ; s++) {
+      const run = new Run('easy', s);
+      run.startShift();
+      run.resume();
+      if (!run.current!.truth.malicious) continue;
+      const out = run.judge('allow', undefined, false, true);
+      expect(out.kind).toBe('fn');
+      expect(out.timedOut).toBe(true);
+      expect(out.title).toMatch(/failed open/);
+      break;
+    }
+  });
+
+  it('the request timer is about 3.5x the old pace and shrinks per shift', () => {
+    const run = new Run('hard', 1);
+    run.startShift();
+    expect(run.seconds).toBe(42);
+    for (let i = 0; i < 30; i++) run.startShift();
+    expect(run.seconds).toBe(18);
+    expect(run.quota).toBe(18);
   });
 
   it('the speed bonus fades from par to twice par, and undo forfeits it', () => {

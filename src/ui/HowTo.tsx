@@ -29,8 +29,8 @@ export function HowTo({ onDone, cta }: { onDone(): void; cta: string }) {
           <b>Write rules, ship patches.</b> Waves of attacks let you deploy a WAF rule. Devs sometimes need you to pick the right code fix.
         </li>
         <li>
-          <b>Beat the clock.</b> A shift is a fixed {SHIFT_MINUTES} minutes. Nothing fails if you're slow, but every correct call scores and fast
-          ones earn a speed bonus, so the better you get, the higher you score.
+          <b>Make quota.</b> A shift is a fixed {SHIFT_MINUTES} minutes, and you need a minimum number of correct calls to keep the job. Each request
+          has a relaxed timer; if it runs out, the WAF fails open and the request is allowed. Fast correct calls earn a speed bonus.
         </li>
       </ol>
       <p class="muted">Not everything scary is an attack. Mr. O'Brien would like to sign up.</p>

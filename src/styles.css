@@ -533,6 +533,12 @@ h1 {
   font-weight: 700;
   font-size: 1rem;
 }
+.quota {
+  font-variant-numeric: tabular-nums;
+}
+.quota.met {
+  color: var(--accent);
+}
 .clock {
   font-variant-numeric: tabular-nums;
 }
