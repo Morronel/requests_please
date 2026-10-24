@@ -4,6 +4,7 @@ import { directiveById } from '../game/directives';
 import type { PatchOption } from '../game/patches';
 import { chipsFor, describeRule, matchRule, OPS, TARGETS } from '../game/rules';
 import { rankFor, type Run } from '../game/run';
+import { t } from '../i18n';
 import type { Rule, RuleOp, RuleTarget } from '../game/types';
 import { RequestCard } from './RequestCard';
 
@@ -17,48 +18,48 @@ export function Briefing({ run, onStart, onQuit }: { run: Run; onStart(): void; 
     <main class="screen briefing">
       <header class="bar">
         <button class="btn small" onClick={onQuit}>
-          ✕ Quit
+          ✕ {t('Quit')}
         </button>
-        <h1>Shift {run.shift}</h1>
-        <span class="muted">{run.cfg.title}</span>
+        <h1>{t('Shift {n}', { n: run.shift })}</h1>
+        <span class="muted">{t(run.cfg.title)}</span>
       </header>
       <p class="memo">
-        <span class="muted">From:</span> CISO · <span class="muted">Re:</span> tonight
+        <span class="muted">{t('From:')}</span> {t('CISO')} · <span class="muted">{t('Re:')}</span> {t('tonight')}
         <br />
-        {run.cfg.shiftSeconds / 60} minutes on the clock, up to {run.seconds}s per request. Quota: {run.quota} correct calls, or you're out. Fast calls score more. Integrity {run.integrity}/{run.cfg.meter}, Uptime {run.uptime}/{run.cfg.meter}.
+        {t("{min} minutes on the clock, up to {s}s per request. Quota: {quota} correct calls, or you're out. Fast calls score more. Integrity {i}/{max}, Uptime {u}/{max}.", { min: run.cfg.shiftSeconds / 60, s: run.seconds, quota: run.quota, i: run.integrity, u: run.uptime, max: run.cfg.meter })}
       </p>
 
-      <h2 class="label">Directives</h2>
+      <h2 class="label">{t('Directives')}</h2>
       <ul class="directives">
         {ds.map((d) => (
           <li class={d.isNew ? 'new' : ''}>
-            {d.isNew && <span class="badge">NEW</span>}
-            <b>{d.title}.</b> {d.text}
+            {d.isNew && <span class="badge">{t('NEW')}</span>}
+            <b>{t(d.title)}.</b> {t(d.text)}
           </li>
         ))}
         {run.retiredDirectives.map((id) => (
-          <li class="retired">Retired: {directiveById(id).title}</li>
+          <li class="retired">{t('Retired: {title}', { title: t(directiveById(id).title) })}</li>
         ))}
       </ul>
 
       {run.rules.length > 0 && (
         <>
-          <h2 class="label">Your WAF rules</h2>
+          <h2 class="label">{t('Your WAF rules')}</h2>
           <ul class="directives">
             {run.rules.map((r) => (
               <li>
-                <b>{r.id}</b> {describeRule(r)} <span class="muted">· caught {r.caught}, collateral {r.collateral}</span>
+                <b>{r.id}</b> {describeRule(r)} <span class="muted">· {t('caught {caught}, collateral {collateral}', { caught: r.caught, collateral: r.collateral })}</span>
               </li>
             ))}
           </ul>
         </>
       )}
 
-      {run.ruleEvent && <p class="intel">⚠ Threat intel: a {CLASSES[run.ruleEvent.cls].name} wave is coming. You'll get to write a rule first.</p>}
-      {run.patchEvent && <p class="intel">🛠 A dev ticket for {run.patchEvent.def.endpoint} will need your review mid-shift.</p>}
+      {run.ruleEvent && <p class="intel">⚠ {t("Threat intel: a {name} wave is coming. You'll get to write a rule first.", { name: t(CLASSES[run.ruleEvent.cls].name) })}</p>}
+      {run.patchEvent && <p class="intel">🛠 {t('A dev ticket for {endpoint} will need your review mid-shift.', { endpoint: run.patchEvent.def.endpoint })}</p>}
 
       <button class="btn big primary" onClick={onStart}>
-        Clock in
+        {t('Clock in')}
       </button>
     </main>
   );
@@ -85,47 +86,47 @@ export function RuleEditor({ run, onDone }: { run: Run; onDone(rule: Omit<Rule, 
   return (
     <main class="screen rule">
       <header class="bar">
-        <h1>Write a rule</h1>
+        <h1>{t('Write a rule')}</h1>
         <span class="muted">
-          slots {run.rules.length}/{run.cfg.ruleSlots}
+          {t('slots')} {run.rules.length}/{run.cfg.ruleSlots}
         </span>
       </header>
       <p class="intel">
-        Incoming {CLASSES[ev.cls].name} wave. One sample below, values already decoded; the dry run shows the rest. Build a rule that catches the attacks but not the customers.
+        {t('Incoming {name} wave. One sample below, values already decoded; the dry run shows the rest. Build a rule that catches the attacks but not the customers.', { name: t(CLASSES[ev.cls].name) })}
       </p>
       <RequestCard req={ev.sample} cfg={run.cfg} compact />
 
-      <h2 class="label">1. Match on</h2>
+      <h2 class="label">{t('1. Match on')}</h2>
       <div class="chips">
-        {TARGETS.map((t) => (
+        {TARGETS.map((tg) => (
           <button
-            class={`chip ${target === t.id ? 'on' : ''}`}
+            class={`chip ${target === tg.id ? 'on' : ''}`}
             onClick={() => {
-              setTarget(t.id);
+              setTarget(tg.id);
               setValue('');
             }}
           >
-            {t.label}
+            {t(tg.label)}
           </button>
         ))}
       </div>
 
       {target !== 'rate' && (
         <>
-          <h2 class="label">2. Operator</h2>
+          <h2 class="label">{t('2. Operator')}</h2>
           <div class="chips">
             {OPS.map((o) => (
               <button class={`chip ${op === o.id ? 'on' : ''}`} onClick={() => setOp(o.id)}>
-                {o.label}
+                {t(o.label)}
               </button>
             ))}
           </div>
         </>
       )}
 
-      <h2 class="label">{target === 'rate' ? '2. Threshold (req/s above)' : '3. Value (tap a piece of the sample)'}</h2>
+      <h2 class="label">{target === 'rate' ? t('2. Threshold (req/s above)') : t('3. Value (tap a piece of the sample)')}</h2>
       <div class="chips">
-        {chips.length === 0 && <span class="muted">Nothing in this part of the sample. Try another field.</span>}
+        {chips.length === 0 && <span class="muted">{t('Nothing in this part of the sample. Try another field.')}</span>}
         {chips.map((c) => (
           <button class={`chip mono ${value === c ? 'on' : ''}`} onClick={() => setValue(c)}>
             {c}
@@ -135,9 +136,9 @@ export function RuleEditor({ run, onDone }: { run: Run; onDone(rule: Omit<Rule, 
 
       <div class="dryrun">
         <div class="dry-head">
-          <b>{rule ? describeRule(rule) : 'No rule yet'}</b>
+          <b>{rule ? describeRule(rule) : t('No rule yet')}</b>
           <span>
-            <span class="ok">caught {caught}/{attacks}</span> · <span class={collateral ? 'bad' : 'muted'}>collateral {collateral}</span>
+            <span class="ok">{t('caught {n}/{total}', { n: caught, total: attacks })}</span> · <span class={collateral ? 'bad' : 'muted'}>{t('collateral {n}', { n: collateral })}</span>
           </span>
         </div>
         <ul>
@@ -152,14 +153,14 @@ export function RuleEditor({ run, onDone }: { run: Run; onDone(rule: Omit<Rule, 
           ))}
         </ul>
       </div>
-      {full && rule && <p class="muted">Slots full: deploying replaces {run.rules[0].id} ({describeRule(run.rules[0])}).</p>}
+      {full && rule && <p class="muted">{t('Slots full: deploying replaces {id} ({rule}).', { id: run.rules[0].id, rule: describeRule(run.rules[0]) })}</p>}
 
       <div class="row2 sticky-actions">
         <button class="btn big" onClick={() => onDone(null)}>
-          Skip
+          {t('Skip')}
         </button>
         <button class="btn big primary" disabled={!rule} onClick={() => rule && onDone(rule)}>
-          Deploy
+          {t('Deploy')}
         </button>
       </div>
     </main>
@@ -180,7 +181,7 @@ function Diff({ text }: { text: string }) {
   );
 }
 
-const PATCH_LABEL: Record<PatchOption['kind'], string> = {
+export const PATCH_LABEL: Record<PatchOption['kind'], string> = {
   fix: '✓ Real fix',
   bypassable: '⚠ Bypassable',
   breaks: '✗ Breaks the feature',
@@ -192,11 +193,11 @@ export function PatchScreen({ run, onChoose, onDone }: { run: Run; onChoose(i: n
   return (
     <main class="screen patch">
       <header class="bar">
-        <h1>Dev ticket</h1>
-        <span class="muted">{CLASSES[ev.def.cls].short}</span>
+        <h1>{t('Dev ticket')}</h1>
+        <span class="muted">{t(CLASSES[ev.def.cls].short)}</span>
       </header>
       <p class="intel">
-        <b>{ev.def.endpoint}</b>: {ev.def.ticket.replace(/`/g, '')}. Three PRs are open. Approve one.
+        <b>{ev.def.endpoint}</b>: {t(ev.def.ticket).replace(/`/g, '')}. {t('Three PRs are open. Approve one.')}
       </p>
       <pre class="code">{ev.def.code}</pre>
       <div class="patches">
@@ -206,10 +207,10 @@ export function PatchScreen({ run, onChoose, onDone }: { run: Run; onChoose(i: n
           return (
             <button class={`patch-opt ${chosen ? `reveal ${opt.kind}` : ''} ${picked ? 'picked' : ''}`} disabled={!!chosen} onClick={() => onChoose(i)}>
               <span class="patch-title">
-                PR #{4100 + n * 7 + run.shift} {chosen ? `· ${PATCH_LABEL[opt.kind]}` : ''}
+                PR #{4100 + n * 7 + run.shift} {chosen ? `· ${t(PATCH_LABEL[opt.kind])}` : ''}
               </span>
               <Diff text={opt.diff} />
-              {chosen && <span class="why">{opt.why.replace(/`/g, '')}</span>}
+              {chosen && <span class="why">{t(opt.why).replace(/`/g, '')}</span>}
             </button>
           );
         })}
@@ -217,7 +218,7 @@ export function PatchScreen({ run, onChoose, onDone }: { run: Run; onChoose(i: n
       {chosen && (
         <div class="sticky-actions">
           <button class="btn big primary" onClick={onDone}>
-            {chosen.kind === 'fix' ? 'Merged. Back to the queue' : 'Back to the queue'}
+            {chosen.kind === 'fix' ? t('Merged. Back to the queue') : t('Back to the queue')}
           </button>
         </div>
       )}
@@ -229,7 +230,7 @@ export function PatchScreen({ run, onChoose, onDone }: { run: Run; onChoose(i: n
 // Shift report and game over
 // ---------------------------------------------------------------------------
 
-const BLAMELESS = [
+export const BLAMELESS = [
   'Root cause: the intern. This is a blameless postmortem.',
   'Contributing factor: Mercury in retrograde. And the intern.',
   'Action item: add another dashboard nobody reads.',
@@ -243,36 +244,36 @@ function pct(n: number, d: number): string {
 
 export function ShiftReport({ run, onNext, onQuit }: { run: Run; onNext(): void; onQuit(): void }) {
   const s = run.stats;
-  const line = BLAMELESS[run.shift % BLAMELESS.length];
+  const line = t(BLAMELESS[run.shift % BLAMELESS.length]);
   return (
     <main class="screen report">
-      <h1>Postmortem: shift {run.shift}</h1>
-      <p class="muted">Status: survived. Severity: {s.fn ? `SEV-${Math.max(1, 4 - s.fn)}` : 'none'}.</p>
+      <h1>{t('Postmortem: shift {n}', { n: run.shift })}</h1>
+      <p class="muted">{t('Status: survived. Severity: {sev}.', { sev: s.fn ? `SEV-${Math.max(1, 4 - s.fn)}` : t('none') })}</p>
       <dl class="stats">
-        <dt>Quota</dt>
+        <dt>{t('Quota')}</dt>
         <dd class="ok">
           {run.quotaDone}/{run.quota}
         </dd>
-        <dt>Processed</dt>
+        <dt>{t('Processed')}</dt>
         <dd>{s.processed}</dd>
-        <dt>Accuracy</dt>
+        <dt>{t('Accuracy')}</dt>
         <dd>{pct(s.correct, s.processed)}</dd>
-        <dt>False positives</dt>
+        <dt>{t('False positives')}</dt>
         <dd class={s.fp ? 'bad' : ''}>{s.fp}</dd>
-        <dt>Missed attacks</dt>
+        <dt>{t('Missed attacks')}</dt>
         <dd class={s.fn ? 'bad' : ''}>{s.fn}</dd>
-        <dt>Wrong class</dt>
+        <dt>{t('Wrong class')}</dt>
         <dd>{s.wrongClass}</dd>
-        <dt>Auto-blocked</dt>
+        <dt>{t('Auto-blocked')}</dt>
         <dd>
-          {s.autoCaught} <span class="muted">(+{s.autoCollateral} oops)</span>
+          {s.autoCaught} <span class="muted">{t('(+{n} oops)', { n: s.autoCollateral })}</span>
         </dd>
-        <dt>Shift score</dt>
+        <dt>{t('Shift score')}</dt>
         <dd>{s.score}</dd>
-        <dt>Total score</dt>
+        <dt>{t('Total score')}</dt>
         <dd>{run.score}</dd>
-        <dt>Rank</dt>
-        <dd class="ok">{rankFor(run.score)}</dd>
+        <dt>{t('Rank')}</dt>
+        <dd class="ok">{t(rankFor(run.score))}</dd>
       </dl>
       {s.incidents.length > 0 && (
         <ul class="incidents">
@@ -284,10 +285,10 @@ export function ShiftReport({ run, onNext, onQuit }: { run: Run; onNext(): void;
       <p class="muted">{line}</p>
       <div class="row2 sticky-actions">
         <button class="btn big" onClick={onQuit}>
-          Clock out
+          {t('Clock out')}
         </button>
         <button class="btn big primary" onClick={onNext}>
-          Next shift
+          {t('Next shift')}
         </button>
       </div>
     </main>
@@ -295,34 +296,34 @@ export function ShiftReport({ run, onNext, onQuit }: { run: Run; onNext(): void;
 }
 
 export function GameOver({ run, isBest, onRetry, onMenu }: { run: Run; isBest: boolean; onRetry(): void; onMenu(): void }) {
-  const t = run.total;
+  const tot = run.total;
   return (
     <main class="screen over">
       <pre class="big-stamp">TERMINATED</pre>
       <p>{run.overReason}</p>
       <dl class="stats">
-        <dt>Final score</dt>
+        <dt>{t('Final score')}</dt>
         <dd>
-          {run.score} {isBest && <span class="badge">NEW BEST</span>}
+          {run.score} {isBest && <span class="badge">{t('NEW BEST')}</span>}
         </dd>
-        <dt>Rank</dt>
-        <dd class="ok">{rankFor(run.score)}</dd>
-        <dt>Reached shift</dt>
+        <dt>{t('Rank')}</dt>
+        <dd class="ok">{t(rankFor(run.score))}</dd>
+        <dt>{t('Reached shift')}</dt>
         <dd>{run.shift}</dd>
-        <dt>Accuracy</dt>
-        <dd>{pct(t.correct, t.processed)}</dd>
-        <dt>Best streak</dt>
+        <dt>{t('Accuracy')}</dt>
+        <dd>{pct(tot.correct, tot.processed)}</dd>
+        <dt>{t('Best streak')}</dt>
         <dd>{run.bestStreak}</dd>
-        <dt>Incidents</dt>
-        <dd>{t.incidents.length}</dd>
+        <dt>{t('Incidents')}</dt>
+        <dd>{tot.incidents.length}</dd>
       </dl>
-      <p class="muted">seed {run.seed.toString(16)}</p>
+      <p class="muted">{t('seed')} {run.seed.toString(16)}</p>
       <div class="row2 sticky-actions">
         <button class="btn big" onClick={onMenu}>
-          Menu
+          {t('Menu')}
         </button>
         <button class="btn big primary" onClick={onRetry}>
-          New run
+          {t('New run')}
         </button>
       </div>
     </main>

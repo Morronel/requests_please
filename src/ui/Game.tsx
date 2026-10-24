@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { CLASSES } from '../game/codex';
 import { describeRule } from '../game/rules';
+import { explain as explainText, t } from '../i18n';
 import { Run, rankFor, type Outcome } from '../game/run';
 import type { AttackClass, Difficulty, Speaker, Verdict } from '../game/types';
 import { store } from '../storage';
@@ -22,7 +23,7 @@ interface Toast {
   text: string;
 }
 
-const WHO: Record<Speaker, string> = {
+export const WHO: Record<Speaker, string> = {
   chad: 'Chad (Growth)',
   ciso: 'CISO',
   intern: 'intern',
@@ -44,7 +45,7 @@ function mmss(seconds: number): string {
 
 function Pips({ label, value, max }: { label: string; value: number; max: number }) {
   return (
-    <span class={`pips ${value <= 1 ? 'low' : ''}`} aria-label={`${label} ${value} of ${max}`}>
+    <span class={`pips ${value <= 1 ? 'low' : ''}`} aria-label={t('{label} {value} of {max}', { label, value, max })}>
       <span class="pips-label">{label}</span>
       {Array.from({ length: max }, (_, i) => (
         <i class={i < value ? 'full' : ''} />
@@ -92,16 +93,16 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   /** Pull pings, auto-blocks and codex unlocks out of the run into toasts. */
   const flush = () => {
     for (const a of run.drainAutoBlocks()) {
-      const name = a.req.truth.cls ? CLASSES[a.req.truth.cls].short : 'request';
+      const name = a.req.truth.cls ? t(CLASSES[a.req.truth.cls].short) : t('request');
       pushToast(
         a.good
-          ? { tone: 'good', text: `${a.rule.id} auto-blocked ${name} (+${a.points})` }
-          : { tone: 'bad', text: `${a.rule.id} blocked a real customer: ${a.req.method.plain} ${a.req.path.plain} (${a.points})` },
+          ? { tone: 'good', text: t('{rule} auto-blocked {name} (+{points})', { rule: a.rule.id, name, points: a.points }) }
+          : { tone: 'bad', text: t('{rule} blocked a real customer: {request} ({points})', { rule: a.rule.id, request: `${a.req.method.plain} ${a.req.path.plain}`, points: a.points }) },
       );
     }
-    for (const p of run.drainPings()) pushToast({ tone: 'ping', who: WHO[p.who], text: p.text }, 5000);
+    for (const p of run.drainPings()) pushToast({ tone: 'ping', who: t(WHO[p.who]), text: p.text }, 5000);
     const fresh = store.unlock(run.seen);
-    if (fresh.length) pushToast({ tone: 'info', text: `Codex unlocked: ${fresh.map((c) => CLASSES[c].short).join(', ')}` });
+    if (fresh.length) pushToast({ tone: 'info', text: t('Codex unlocked: {names}', { names: fresh.map((c) => t(CLASSES[c].short)).join(', ') }) });
     if (run.phase === 'over') {
       setBest(
         store.submitScore(difficulty, {
@@ -250,7 +251,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
           run={run}
           onDone={(rule) => {
             run.deployRule(rule);
-            if (rule) pushToast({ tone: 'info', text: `Deployed: ${describeRule(rule)}` });
+            if (rule) pushToast({ tone: 'info', text: t('Deployed: {rule}', { rule: describeRule(rule) }) });
             afterAdvance();
           }}
         />
@@ -292,8 +293,8 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
     <main class="game">
       <header class="hud">
         <div class="hud-row">
-          <Pips label="INT" value={run.integrity} max={run.cfg.meter} />
-          <Pips label="UP" value={run.uptime} max={run.cfg.meter} />
+          <Pips label={t('INT')} value={run.integrity} max={run.cfg.meter} />
+          <Pips label={t('UP')} value={run.uptime} max={run.cfg.meter} />
           <button class="hud-dir" onClick={() => setDrawer(!drawer)} aria-expanded={drawer}>
             § {run.directives.length}
             {run.rules.length ? ` · R${run.rules.length}` : ''}
@@ -301,9 +302,9 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
         </div>
         <div class="hud-row small">
           <span class={run.lastCall ? 'clock last' : 'clock'}>
-            S{run.shift} · {run.lastCall ? 'LAST CALL' : mmss(run.clock)}
+            {t('S{shift}', { shift: run.shift })} · {run.lastCall ? t('LAST CALL') : mmss(run.clock)}
           </span>
-          <span class={run.quotaDone >= run.quota ? 'quota met' : 'quota'} aria-label={`Quota ${run.quotaDone} of ${run.quota}`}>
+          <span class={run.quotaDone >= run.quota ? 'quota met' : 'quota'} aria-label={t('Quota {done} of {quota}', { done: run.quotaDone, quota: run.quota })}>
             ✓{Math.min(run.quotaDone, run.quota)}/{run.quota}
           </span>
           <span class="score">{run.score}</span>
@@ -324,11 +325,11 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
                   {feedback.points > 0 ? `+${feedback.points}` : feedback.points}
                 </b>
               </span>
-              {explain && <span class="status-why">{feedback.truth.explain}</span>}
+              {explain && <span class="status-why">{explainText(feedback.truth.explain)}</span>}
             </>
           ) : (
             <span class="status-line muted">
-              <span class="prompt">&gt;</span> waiting for verdict… (tap values to inspect)
+              <span class="prompt">&gt;</span> {t('waiting for verdict… (tap values to inspect)')}
             </span>
           )}
         </button>
@@ -336,17 +337,17 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
 
       {drawer && (
         <div class="drawer" onClick={() => setDrawer(false)}>
-          <h2 class="label">Directives</h2>
+          <h2 class="label">{t('Directives')}</h2>
           <ul class="directives">
             {run.directiveTexts().map((d) => (
               <li class={d.isNew ? 'new' : ''}>
-                <b>{d.title}.</b> {d.text}
+                <b>{t(d.title)}.</b> {t(d.text)}
               </li>
             ))}
           </ul>
           {run.rules.length > 0 && (
             <>
-              <h2 class="label">WAF rules</h2>
+              <h2 class="label">{t('WAF rules')}</h2>
               <ul class="directives">
                 {run.rules.map((r) => (
                   <li>
@@ -356,7 +357,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
               </ul>
             </>
           )}
-          <p class="muted">tap to close</p>
+          <p class="muted">{t('tap to close')}</p>
         </div>
       )}
 
@@ -381,7 +382,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
       >
         <div class="card" key={req.id} style={drag ? { transform: `translateX(${drag}px) rotate(${drag / 40}deg)` } : undefined}>
           <RequestCard req={req} cfg={run.cfg} onCost={cost} />
-          {stamp && <div class={`stamp stamp-${stamp.verdict}`}>{stamp.verdict === 'allow' ? '200 OK' : `403 ${stamp.cls ? CLASSES[stamp.cls].short : ''}`}</div>}
+          {stamp && <div class={`stamp stamp-${stamp.verdict}`}>{stamp.verdict === 'allow' ? '200 OK' : `403 ${stamp.cls ? t(CLASSES[stamp.cls].short) : ''}`}</div>}
         </div>
       </section>
 
@@ -389,8 +390,8 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
         <div class="sheet-backdrop" onClick={() => setClassifier(false)}>
           <div class="sheet" onClick={(e) => e.stopPropagation()}>
             <div class="sheet-head">
-              <b>Block as…</b>
-              <button class="x" onClick={() => setClassifier(false)} aria-label="Cancel">
+              <b>{t('Block as…')}</b>
+              <button class="x" onClick={() => setClassifier(false)} aria-label={t('Cancel')}>
                 ✕
               </button>
             </div>
@@ -398,7 +399,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
               {classes.map((c, i) => (
                 <button class={`cls cls-${c}`} onClick={() => stage('block', c)}>
                   <span class="cls-icon">{CLASSES[c].icon}</span>
-                  <span class="cls-name">{CLASSES[c].short}</span>
+                  <span class="cls-name">{t(CLASSES[c].short)}</span>
                   <span class="cls-key">{i < 9 ? i + 1 : i === 9 ? 0 : ''}</span>
                 </button>
               ))}
@@ -410,15 +411,15 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
       <footer class="verdicts">
         {stamp ? (
           <button class="btn verdict undo" onClick={undo}>
-            ↶ Undo
+            ↶ {t('Undo')}
           </button>
         ) : (
           <>
             <button class="btn verdict allow" onClick={() => stage('allow')}>
-              ALLOW
+              {t('ALLOW')}
             </button>
             <button class="btn verdict block" onClick={() => setClassifier(true)}>
-              BLOCK
+              {t('BLOCK')}
             </button>
           </>
         )}

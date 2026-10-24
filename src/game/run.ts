@@ -1,3 +1,4 @@
+import { t as tr } from '../i18n';
 import { CLASSES } from './codex';
 import { DIFFICULTIES, quotaFor, secondsFor, type DifficultyConfig } from './difficulty';
 import { directiveById } from './directives';
@@ -96,7 +97,7 @@ export function rankFor(score: number): string {
   return name;
 }
 
-const INCIDENT_LINES: Partial<Record<AttackClass, string>> = {
+export const INCIDENT_LINES: Partial<Record<AttackClass, string>> = {
   sqli: 'user table is now on Pastebin',
   xss: 'customers are getting cookie-stealing popups',
   traversal: '/etc/passwd is trending on Twitter',
@@ -113,14 +114,14 @@ const INCIDENT_LINES: Partial<Record<AttackClass, string>> = {
   policy: 'legal is asking why we ignored the directive',
 };
 
-const CHAD_LINES = [
+export const CHAD_LINES = [
   'why is checkout down?? a customer just tweeted at us',
   'that was a paying customer. PAYING.',
   'my conversion dashboard just went red. was that you?',
   'can we not block people who want to give us money',
 ];
 
-const FLAVOR: [Speaker, string][] = [
+export const FLAVOR: [Speaker, string][] = [
   ['intern', 'quick q: is it fine if i deploy from prod? asking for a friend'],
   ['intern', 'i rotated the API keys! (by adding a 1 at the end)'],
   ['chad', 'reminder: Q4 OKR is 0 blocked customers 🙏'],
@@ -309,7 +310,7 @@ export class Run {
       }
       if (this.rng.chance(0.08)) {
         const [who, text] = this.rng.pick(FLAVOR);
-        this.ping(who, text);
+        this.ping(who, tr(text));
       }
       this.current = req;
       this.dealtAt = this.clock;
@@ -330,7 +331,7 @@ export class Run {
       this.stats.autoCollateral++;
       this.total.autoCollateral++;
       if (++this.collateralHits % 3 === 0) {
-        this.pending.push({ fireIn: 0, meter: 'uptime', who: 'chad', text: `your rule "${rule.value}" is blocking real customers. three of them. so far.` });
+        this.pending.push({ fireIn: 0, meter: 'uptime', who: 'chad', text: tr('your rule "{value}" is blocking real customers. three of them. so far.', { value: rule.value }) });
       }
     }
     if (req.truth.cls) this.seen.add(req.truth.cls);
@@ -356,7 +357,7 @@ export class Run {
     const par = this.cfg.parSeconds;
     const timeBonus = noBonus || timedOut ? 0 : Math.round(POINTS.speed * Math.max(0, Math.min(1, 2 - took / par)));
     let speedBonus = 0;
-    const cls = t.cls ? CLASSES[t.cls].short : '';
+    const cls = t.cls ? tr(CLASSES[t.cls].short) : '';
     let kind: OutcomeKind;
     let points: number;
     let title: string;
@@ -366,32 +367,32 @@ export class Run {
         kind = 'tn';
         speedBonus = timeBonus;
         points = POINTS.allow + (t.bait ? POINTS.bait : 0) + timeBonus;
-        title = t.harmless ? `200 OK: ${cls} bounced off the patch` : t.bait ? '200 OK: nice, not fooled' : '200 OK';
+        title = t.harmless ? tr('200 OK: {cls} bounced off the patch', { cls }) : t.bait ? tr('200 OK: nice, not fooled') : '200 OK';
       } else {
         kind = 'fn';
         points = -30;
-        title = timedOut ? `Timed out: WAF failed open, ${cls} got through` : `Missed: ${cls} got through`;
-        const inc = `INC-${this.rng.int(1000, 9999)}: ${INCIDENT_LINES[t.cls!] ?? 'something bad happened'}`;
+        title = timedOut ? tr('Timed out: WAF failed open, {cls} got through', { cls }) : tr('Missed: {cls} got through', { cls });
+        const inc = `INC-${this.rng.int(1000, 9999)}: ${tr(INCIDENT_LINES[t.cls!] ?? 'something bad happened')}`;
         this.stats.incidents.push(inc);
         this.total.incidents.push(inc);
-        this.pending.push({ fireIn: 2, meter: 'integrity', who: 'ciso', text: `${inc}. explain.` });
+        this.pending.push({ fireIn: 2, meter: 'integrity', who: 'ciso', text: tr('{inc}. explain.', { inc }) });
       }
     } else if (t.malicious) {
       if (picked === t.cls) {
         kind = 'tp';
         speedBonus = timeBonus;
         points = POINTS.block + timeBonus;
-        title = `403 Blocked: ${cls}, correct`;
+        title = tr('403 Blocked: {cls}, correct', { cls });
       } else {
         kind = 'wrongclass';
         points = this.cfg.wrongClassPoints;
-        title = `Blocked, but it was ${cls}`;
+        title = tr('Blocked, but it was {cls}', { cls });
       }
     } else {
       kind = 'fp';
       points = -15;
-      title = t.bait ? 'False positive: it only looked scary' : 'False positive: legit customer';
-      this.pending.push({ fireIn: 1, meter: 'uptime', who: 'chad', text: this.rng.pick(CHAD_LINES) });
+      title = t.bait ? tr('False positive: it only looked scary') : tr('False positive: legit customer');
+      this.pending.push({ fireIn: 1, meter: 'uptime', who: 'chad', text: tr(this.rng.pick(CHAD_LINES)) });
     }
 
     if (points > 0) points = Math.round(points * this.multiplier);
@@ -429,8 +430,8 @@ export class Run {
     this.ping(p.who, p.text);
     if (p.meter === 'integrity') this.integrity = Math.max(0, this.integrity - 1);
     else this.uptime = Math.max(0, this.uptime - 1);
-    if (this.integrity <= 0) this.gameOver('Integrity hit zero. The breach made the news, and you made the postmortem.');
-    else if (this.uptime <= 0) this.gameOver('Uptime hit zero. Growth convinced the board to bring back the ML firewall.');
+    if (this.integrity <= 0) this.gameOver(tr('Integrity hit zero. The breach made the news, and you made the postmortem.'));
+    else if (this.uptime <= 0) this.gameOver(tr('Uptime hit zero. Growth convinced the board to bring back the ML firewall.'));
   }
 
   private gameOver(reason: string): void {
@@ -445,7 +446,7 @@ export class Run {
     this.pending = [];
     due.forEach((p) => this.fire(p));
     if (this.phase !== 'over' && this.quotaDone < this.quota) {
-      this.gameOver(`Quota missed: ${this.quotaDone} of ${this.quota} correct calls. HR has scheduled a "quick chat".`);
+      this.gameOver(tr('Quota missed: {done} of {quota} correct calls. HR has scheduled a "quick chat".', { done: this.quotaDone, quota: this.quota }));
     }
     if (this.phase !== 'over') this.phase = 'report';
     this.current = null;
@@ -469,16 +470,16 @@ export class Run {
     if (!ev) throw new Error('no patch event');
     const opt = ev.def.options[optionIndex];
     ev.chosen = opt;
-    const name = CLASSES[ev.def.cls].short;
+    const name = tr(CLASSES[ev.def.cls].short);
     if (opt.kind === 'fix') {
       this.patched.add(`${ev.def.cls}@${ev.def.endpoint}`);
       this.addScore(50);
-      this.ping('system', `patch deployed to ${ev.def.endpoint}. ${name} there is now harmless.`);
+      this.ping('system', tr('patch deployed to {endpoint}. {name} there is now harmless.', { endpoint: ev.def.endpoint, name }));
     } else if (opt.kind === 'bypassable') {
-      this.ping('intern', 'patch shipped!! 🚀 closing the ticket');
-      this.pending.push({ fireIn: 3, meter: 'integrity', who: 'ciso', text: `the ${ev.def.endpoint} patch was bypassed within the hour. a blacklist? really?` });
+      this.ping('intern', tr('patch shipped!! 🚀 closing the ticket'));
+      this.pending.push({ fireIn: 3, meter: 'integrity', who: 'ciso', text: tr('the {endpoint} patch was bypassed within the hour. a blacklist? really?', { endpoint: ev.def.endpoint }) });
     } else {
-      this.pending.push({ fireIn: 0, meter: 'uptime', who: 'chad', text: `${ev.def.endpoint} is broken for every customer since your patch` });
+      this.pending.push({ fireIn: 0, meter: 'uptime', who: 'chad', text: tr('{endpoint} is broken for every customer since your patch', { endpoint: ev.def.endpoint }) });
     }
     return opt;
   }
