@@ -52,8 +52,8 @@ function play(tones: Tone[], thud?: { vol: number; freq: number; dur: number }):
 export const sfx = {
   /** Any button press: a barely-there tick. */
   tap: () => play([{ midi: 96, dur: 0.025, vol: 0.06 }]),
-  allow: () => play([{ midi: 76, dur: 0.07, vol: 0.18 }, { midi: 83, at: 0.06, dur: 0.12, vol: 0.18 }], { vol: 0.5, freq: 900, dur: 0.09 }),
-  block: () => play([{ midi: 43, dur: 0.16, type: 'square', vol: 0.2, glide: -5 }], { vol: 0.9, freq: 600, dur: 0.14 }),
+  allow: () => play([{ midi: 76, dur: 0.07, vol: 0.18 }, { midi: 83, at: 0.06, dur: 0.12, vol: 0.18 }], { vol: 0.3, freq: 900, dur: 0.09 }),
+  block: () => play([{ midi: 43, dur: 0.16, type: 'square', vol: 0.2, glide: -5 }], { vol: 0.45, freq: 600, dur: 0.14 }),
   correct: () => play([{ midi: 84, dur: 0.06, vol: 0.12 }, { midi: 88, at: 0.05, dur: 0.09, vol: 0.12 }]),
   wrong: () => play([{ midi: 50, dur: 0.22, type: 'sawtooth', vol: 0.16, glide: -3 }, { midi: 49, at: 0.01, dur: 0.22, type: 'square', vol: 0.08, glide: -3 }]),
   undo: () => play([{ midi: 79, dur: 0.12, vol: 0.14, glide: -12 }]),
