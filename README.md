@@ -1,3 +1,10 @@
+<p align="center">
+  <a href="media/trailer.mp4"><img src="media/trailer.gif" width="480" alt="Requests, Please teaser: decode a payload, block the hackers, allow the customers, review patches, write WAF rules, get fired"></a>
+</p>
+<p align="center">
+  <a href="https://morronel.github.io/requests_please/"><b>▶ Play in your browser</b></a> · <a href="media/trailer.mp4">Watch the teaser with sound</a>
+</p>
+
 # Requests, Please
 
 A mobile-first WAF simulator. Papers, Please, but you're the web application firewall.
