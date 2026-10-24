@@ -5,6 +5,7 @@ import { randomSeed } from '../game/rng';
 import { rankFor } from '../game/run';
 import { t } from '../i18n';
 import { store } from '../storage';
+import { ChannelPlug } from './Credits';
 import { Game } from './Game';
 
 /** Story mode: night briefing with the cast's messages (and a choice), the night itself, then the next one. */
@@ -133,6 +134,7 @@ function StoryEnding({ onMenu, onRestart }: { onMenu(): void; onRestart(): void 
         <dt>{t('Rank')}</dt>
         <dd class="ok">{t(rankFor(c.score))}</dd>
       </dl>
+      <ChannelPlug />
       <div class="row2 sticky-actions">
         <button class="btn big" onClick={onMenu}>
           {t('Menu')}

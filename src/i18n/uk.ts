@@ -669,4 +669,12 @@ export const UK: Record<string, string> = {
   "Shifts survived": "Пережито змін",
   "Results board: {mode}": "Таблиця результатів: {mode}",
   "this run missed the top {n}": "ця гра не потрапила в топ-{n}",
+  "Credits": "Автори",
+  "Made by": "Зробили",
+  "Friends": "Друзі",
+  "Off shift? Join /binary_xor": "Зміна скінчилась? Заходь у /binary_xor",
+  "Free learning materials now and then, plus a friendly Ukrainian-speaking crew. Most of us speak English too.": "Іноді ділимося безкоштовними матеріалами для навчання. Дружня україномовна спільнота, і більшість говорить англійською.",
+  "Subscribe on Telegram": "Підписатися в Telegram",
+  "Security, free learning materials and a Ukrainian-speaking community.": "Безпека, безкоштовні навчальні матеріали та україномовна спільнота.",
+  "Our friends from the DC8044 community.": "Наші друзі зі спільноти DC8044.",
 };
