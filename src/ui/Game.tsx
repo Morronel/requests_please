@@ -77,7 +77,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [drawer, setDrawer] = useState(false);
   const [drag, setDrag] = useState(0);
-  const [best, setBest] = useState(false);
+  const [result, setResult] = useState({ best: false, place: -1 });
   const [held, setHeld] = useState(false);
   const stampTimer = useRef<number>();
   const autoTimer = useRef<number>();
@@ -106,16 +106,28 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
     if (fresh.length) pushToast({ tone: 'info', text: t('Codex unlocked: {names}', { names: fresh.map((c) => t(CLASSES[c].short)).join(', ') }) });
     if (run.phase === 'report') sfx.shiftEnd();
     if (run.phase === 'over') {
-      sfx.gameOver();
-      setBest(
-        store.submitScore(difficulty, {
+      if (run.clockedOut) sfx.shiftEnd();
+      else sfx.gameOver();
+      setResult(
+        store.recordRun(difficulty, {
           score: run.score,
           shift: run.shift,
+          cleared: run.shiftsCleared,
           accuracy: run.total.processed ? run.total.correct / run.total.processed : 0,
           rank: rankFor(run.score),
+          ended: run.clockedOut ? 'out' : 'fired',
+          at: Date.now(),
         }),
       );
     }
+  };
+
+  /** Go home between shifts. A run with nothing played yet just leaves without a board entry. */
+  const clockOut = () => {
+    if (run.shiftsCleared === 0 && run.phase === 'briefing') return onExit();
+    run.clockOut();
+    flush();
+    rerender();
   };
 
   const startClock = () => {
@@ -298,7 +310,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
       return (
         <Briefing
           run={run}
-          onQuit={onExit}
+          onQuit={clockOut}
           onStart={() => {
             sfx.shiftStart();
             run.resume();
@@ -336,7 +348,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
       return (
         <ShiftReport
           run={run}
-          onQuit={onExit}
+          onQuit={clockOut}
           onNext={() => {
             run.startShift();
             rerender();
@@ -344,7 +356,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
         />
       );
     case 'over':
-      return <GameOver run={run} isBest={best} onRetry={onRetry} onMenu={onExit} />;
+      return <GameOver run={run} result={result} board={store.board(difficulty)} onRetry={onRetry} onMenu={onExit} />;
   }
 
   const req = run.current!;
