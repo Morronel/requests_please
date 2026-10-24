@@ -1433,3 +1433,46 @@ h1 {
   color: var(--ok);
   border-color: var(--ok);
 }
+
+/* -------------------------------------------------------- credits / plug */
+
+.plug {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--fg);
+  text-decoration: none;
+}
+.plug:hover,
+.plug:focus-visible {
+  border-color: var(--accent);
+}
+.plug-logo {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  box-shadow: 0 0 12px var(--glow);
+}
+.plug-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  font-size: 0.85rem;
+}
+.plug-text b {
+  color: var(--accent);
+  font-size: 0.95rem;
+}
+.plug-cta {
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+.credits .label {
+  margin-top: 20px;
+}

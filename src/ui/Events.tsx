@@ -9,6 +9,7 @@ import { t } from '../i18n';
 import type { AttackClass, Rule, RuleOp, RuleTarget } from '../game/types';
 import { BOARD_SIZE, type BoardEntry } from '../storage';
 import { RequestCard } from './RequestCard';
+import { ChannelPlug } from './Credits';
 import { BoardTable } from './Results';
 
 // ---------------------------------------------------------------------------
@@ -415,6 +416,7 @@ export function GameOver({ run, result, board, onRetry, onMenu }: GameOverProps)
           <BoardTable rows={board} highlight={result.place} />
         </>
       )}
+      <ChannelPlug />
       <p class="muted">{t('seed')} {run.seed.toString(16)}</p>
       <div class="row2 sticky-actions">
         <button class="btn big" onClick={onMenu}>
