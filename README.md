@@ -35,6 +35,6 @@ Text goes through `t()` from `src/i18n`, gettext style: the English string is th
 
 Add `#debug` to the URL to expose the current run as `window.__run` for automated playtests.
 
-## Deploy
+## Subscribe To My Telegram Channel
 
-`.github/workflows/deploy.yml` runs tests and the build on every PR, and publishes `dist/` to GitHub Pages on pushes to `main`. Enable it once under **Settings → Pages → Source: GitHub Actions**.
+https://t.me/binary_xor
