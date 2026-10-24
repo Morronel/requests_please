@@ -62,7 +62,31 @@ function release(g: GainNode, t: number, time: number): void {
   g.gain.setTargetAtTime(0, t, time / 4);
 }
 
+/**
+ * Stop times of every source still sounding, per station. If the audio thread
+ * falls behind, the output tears into noise, so decorative voices (hats,
+ * shakers, arps) are skipped while too many sources are live.
+ */
+const live = new WeakMap<Kit, number[]>();
+const MAX_SOURCES = 48;
+
+function track(k: Kit, stop: number): void {
+  let l = live.get(k);
+  if (!l) live.set(k, (l = []));
+  l.push(stop);
+}
+
+/** True when there is room for an optional voice starting at `t`. */
+function room(k: Kit, t: number): boolean {
+  const l = live.get(k);
+  if (!l) return true;
+  const keep = l.filter((stop) => stop > t);
+  live.set(k, keep);
+  return keep.length < MAX_SOURCES;
+}
+
 function osc(k: Kit, type: OscillatorType, freq: number, t: number, stop: number, detune = 0): OscillatorNode {
+  track(k, stop);
   const o = k.ctx.createOscillator();
   o.type = type;
   o.frequency.value = freq;
@@ -73,6 +97,7 @@ function osc(k: Kit, type: OscillatorType, freq: number, t: number, stop: number
 }
 
 function noise(k: Kit, t: number, dur: number): AudioBufferSourceNode {
+  track(k, t + dur + 0.05);
   const s = k.ctx.createBufferSource();
   s.buffer = k.noise;
   s.start(t, Math.random() * (k.noise.duration - dur - 0.05), dur + 0.05);
@@ -110,6 +135,7 @@ export function snare(k: Kit, t: number, vel = 1, bright = 1, send = 0.15): void
 }
 
 export function hat(k: Kit, t: number, vel = 1, open = false): void {
+  if (!room(k, t)) return;
   const dur = open ? 0.28 : 0.05;
   const n = noise(k, t, dur);
   const g = env(k, t, 0.16 * vel, 0.001, dur);
@@ -117,6 +143,7 @@ export function hat(k: Kit, t: number, vel = 1, open = false): void {
 }
 
 export function ride(k: Kit, t: number, vel = 1): void {
+  if (!room(k, t)) return;
   const n = noise(k, t, 0.9);
   const g = env(k, t, 0.12 * vel, 0.001, 0.8);
   n.connect(g).connect(bus(k, 'bandpass', 6500, 1.4, 0.2));
@@ -128,6 +155,7 @@ export function ride(k: Kit, t: number, vel = 1): void {
 
 /** A brush sweep: filtered noise that swells in and out over `dur`. */
 export function brush(k: Kit, t: number, dur: number, vel = 1): void {
+  if (!room(k, t)) return;
   const n = noise(k, t, dur);
   const g = k.ctx.createGain();
   g.gain.setValueAtTime(0, t);
@@ -137,6 +165,7 @@ export function brush(k: Kit, t: number, dur: number, vel = 1): void {
 }
 
 export function shaker(k: Kit, t: number, vel = 1): void {
+  if (!room(k, t)) return;
   const n = noise(k, t, 0.06);
   const g = env(k, t, 0.07 * vel, 0.008, 0.05);
   n.connect(g).connect(bus(k, 'bandpass', 9000, 1, 0));
@@ -256,6 +285,7 @@ export function pad(k: Kit, t: number, midi: number, dur: number, vel = 1, brigh
 
 /** Short filtered square stab for arps. */
 export function pluck(k: Kit, t: number, midi: number, vel = 1, send = 0.4): void {
+  if (!room(k, t)) return;
   const g = env(k, t, 0.06 * vel, 0.002, 0.2);
   osc(k, 'square', hz(midi), t, t + 0.3).connect(g);
   // The octave-up saw dies first, which reads as a closing filter.
@@ -273,10 +303,12 @@ export function vinyl(k: Kit, t: number, level = 1): () => void {
   const len = ctx.sampleRate * 3;
   const buf = ctx.createBuffer(1, len, ctx.sampleRate);
   const d = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) {
-    let v = (Math.random() * 2 - 1) * 0.012;
-    if (Math.random() < 0.0004) v += (Math.random() * 2 - 1) * 0.5;
-    d[i] = v;
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * 0.01;
+  // Soft pops: a few tiny decaying ticks rather than full-scale single-sample spikes.
+  for (let p = 0; p < 7; p++) {
+    const at = Math.floor(Math.random() * (len - 64));
+    const amp = (Math.random() < 0.5 ? -1 : 1) * (0.05 + Math.random() * 0.07);
+    for (let j = 0; j < 48; j++) d[at + j] += amp * Math.exp(-j / 8) * (j % 2 ? -0.6 : 1);
   }
   const s = ctx.createBufferSource();
   s.buffer = buf;

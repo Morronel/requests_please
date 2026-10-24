@@ -20,10 +20,20 @@ export function audio(): Engine | null {
   const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctor) return null;
   try {
-    const ctx = new Ctor({ latencyHint: 'interactive' });
+    const ctx = new Ctor({ latencyHint: 'playback' });
+    // Larger buffers ("playback") give the synth room on slow devices; an audio
+    // thread that misses its deadline is what makes speakers crackle and tear.
+    // A brick-wall limiter keeps music plus sfx from ever clipping the output.
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -6;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.002;
+    limiter.release.value = 0.1;
+    limiter.connect(ctx.destination);
     const master = ctx.createGain();
-    master.gain.value = 0.9;
-    master.connect(ctx.destination);
+    master.gain.value = 0.8;
+    master.connect(limiter);
 
     const glue = ctx.createDynamicsCompressor();
     glue.threshold.value = -18;
@@ -38,7 +48,7 @@ export function audio(): Engine | null {
     sfx.gain.value = prefs.get().sfx ? 0.55 : 0;
     sfx.connect(master);
 
-    engine = { ctx, music: glue, sfx, noise: makeNoise(ctx), verb: makeImpulse(ctx, 1.6) };
+    engine = { ctx, music: glue, sfx, noise: makeNoise(ctx), verb: makeImpulse(ctx, 1.2) };
     musicLevel = music;
     return engine;
   } catch {
