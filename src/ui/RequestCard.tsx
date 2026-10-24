@@ -1,3 +1,4 @@
+import { sfx } from '../audio';
 import { useState } from 'preact/hooks';
 import type { DifficultyConfig } from '../game/difficulty';
 import { decode, decodeJwt, ENCODING_LABEL } from '../game/encoding';
@@ -76,9 +77,11 @@ export function RequestCard({ req, cfg, onCost, compact }: Props) {
     const out = decode(top(sel), enc);
     if (out === null || out === top(sel)) {
       setShake((n) => n + 1);
+      sfx.nope();
       navigator.vibrate?.(30);
       return;
     }
+    sfx.decode();
     setStacks((s) => ({ ...s, [sel.id]: [...(s[sel.id] ?? []), out] }));
   };
 

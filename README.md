@@ -16,6 +16,7 @@ You're on night shift at Edge Node 7 after the board fired the ML firewall. HTTP
 - **Codex** that unlocks an explainer for each attack you meet.
 - Thumb-sized controls, swipe right to allow / left to block, a short undo, haptics, keyboard shortcuts (`A`, `B`, `1`-`0`, `U`).
 - Offline-capable PWA, no backend. High scores live in your browser.
+- **Radio** with three stations (lo-fi, drum & bass, blues & jazz), each a ten-minute tape of four tracks, plus short sound effects. Everything is synthesized live with the Web Audio API (`src/audio`), so there are no audio files and nothing to license.
 
 ## Development
 

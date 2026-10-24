@@ -2,6 +2,7 @@ import { CLASSES } from '../game/codex';
 import { DIFFICULTIES } from '../game/difficulty';
 import type { Difficulty } from '../game/types';
 import { store, type Settings } from '../storage';
+import { RadioPanel } from './Radio';
 
 interface Props {
   onPlay(d: Difficulty): void;
@@ -65,6 +66,7 @@ export function Menu({ onPlay, onCodex, onHowTo, settings, onSettings }: Props) 
           buzz: {settings.haptics ? 'on' : 'off'}
         </button>
       </div>
+      <RadioPanel />
       <p class="foot">X-Evil-Bit: 0 · RFC 3514 compliant · no cookies were harmed</p>
     </main>
   );
