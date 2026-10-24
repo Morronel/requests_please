@@ -7,8 +7,9 @@ import { Codex } from './Codex';
 import { Game } from './Game';
 import { HowTo } from './HowTo';
 import { Menu } from './Menu';
+import { Results } from './Results';
 
-type Screen = { id: 'menu' } | { id: 'howto'; then?: Difficulty } | { id: 'codex' } | { id: 'game'; difficulty: Difficulty; seed: number };
+type Screen = { id: 'menu' } | { id: 'howto'; then?: Difficulty } | { id: 'codex' } | { id: 'results' } | { id: 'game'; difficulty: Difficulty; seed: number };
 
 export function App() {
   const [screen, setScreen] = useState<Screen>({ id: 'menu' });
@@ -34,7 +35,7 @@ export function App() {
 
   switch (screen.id) {
     case 'menu':
-      return <Menu onPlay={play} onCodex={() => setScreen({ id: 'codex' })} onHowTo={() => setScreen({ id: 'howto' })} settings={settings} onSettings={updateSettings} />;
+      return <Menu onPlay={play} onCodex={() => setScreen({ id: 'codex' })} onResults={() => setScreen({ id: 'results' })} onHowTo={() => setScreen({ id: 'howto' })} settings={settings} onSettings={updateSettings} />;
     case 'howto':
       return (
         <HowTo
@@ -47,6 +48,8 @@ export function App() {
       );
     case 'codex':
       return <Codex onBack={() => setScreen({ id: 'menu' })} />;
+    case 'results':
+      return <Results onBack={() => setScreen({ id: 'menu' })} />;
     case 'game':
       return (
         <Game

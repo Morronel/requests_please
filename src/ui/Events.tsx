@@ -6,7 +6,9 @@ import { chipsFor, describeRule, matchRule, OPS, TARGETS } from '../game/rules';
 import { rankFor, type Run } from '../game/run';
 import { t } from '../i18n';
 import type { Rule, RuleOp, RuleTarget } from '../game/types';
+import { BOARD_SIZE, type BoardEntry } from '../storage';
 import { RequestCard } from './RequestCard';
+import { BoardTable } from './Results';
 
 // ---------------------------------------------------------------------------
 // Briefing
@@ -18,7 +20,7 @@ export function Briefing({ run, onStart, onQuit }: { run: Run; onStart(): void; 
     <main class="screen briefing">
       <header class="bar">
         <button class="btn small" onClick={onQuit}>
-          ✕ {t('Quit')}
+          ✕ {run.shiftsCleared ? t('Clock out') : t('Quit')}
         </button>
         <h1>{t('Shift {n}', { n: run.shift })}</h1>
         <span class="muted">{t(run.cfg.title)}</span>
@@ -295,21 +297,31 @@ export function ShiftReport({ run, onNext, onQuit }: { run: Run; onNext(): void;
   );
 }
 
-export function GameOver({ run, isBest, onRetry, onMenu }: { run: Run; isBest: boolean; onRetry(): void; onMenu(): void }) {
+interface GameOverProps {
+  run: Run;
+  result: { best: boolean; place: number };
+  board: BoardEntry[];
+  onRetry(): void;
+  onMenu(): void;
+}
+
+export function GameOver({ run, result, board, onRetry, onMenu }: GameOverProps) {
   const tot = run.total;
   return (
     <main class="screen over">
-      <pre class="big-stamp">TERMINATED</pre>
+      <pre class={run.clockedOut ? 'big-stamp out' : 'big-stamp'}>{run.clockedOut ? 'CLOCKED OUT' : 'TERMINATED'}</pre>
       <p>{run.overReason}</p>
       <dl class="stats">
         <dt>{t('Final score')}</dt>
         <dd>
-          {run.score} {isBest && <span class="badge">{t('NEW BEST')}</span>}
+          {run.score} {result.best && <span class="badge">{t('NEW BEST')}</span>}
         </dd>
         <dt>{t('Rank')}</dt>
         <dd class="ok">{t(rankFor(run.score))}</dd>
         <dt>{t('Reached shift')}</dt>
         <dd>{run.shift}</dd>
+        <dt>{t('Shifts survived')}</dt>
+        <dd>{run.shiftsCleared}</dd>
         <dt>{t('Accuracy')}</dt>
         <dd>{pct(tot.correct, tot.processed)}</dd>
         <dt>{t('Best streak')}</dt>
@@ -317,6 +329,11 @@ export function GameOver({ run, isBest, onRetry, onMenu }: { run: Run; isBest: b
         <dt>{t('Incidents')}</dt>
         <dd>{tot.incidents.length}</dd>
       </dl>
+      <h2 class="label">
+        {t('Results board: {mode}', { mode: t(run.cfg.id.toUpperCase()) })}
+        {result.place < 0 && <span class="muted"> · {t('this run missed the top {n}', { n: BOARD_SIZE })}</span>}
+      </h2>
+      <BoardTable rows={board} highlight={result.place} />
       <p class="muted">{t('seed')} {run.seed.toString(16)}</p>
       <div class="row2 sticky-actions">
         <button class="btn big" onClick={onMenu}>

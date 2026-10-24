@@ -8,6 +8,7 @@ import { RadioPanel } from './Radio';
 interface Props {
   onPlay(d: Difficulty): void;
   onCodex(): void;
+  onResults(): void;
   onHowTo(): void;
   settings: Settings;
   onSettings(patch: Partial<Settings>): void;
@@ -15,7 +16,7 @@ interface Props {
 
 const THEMES: Settings['theme'][] = ['green', 'amber', 'ice'];
 
-export function Menu({ onPlay, onCodex, onHowTo, settings, onSettings }: Props) {
+export function Menu({ onPlay, onCodex, onResults, onHowTo, settings, onSettings }: Props) {
   const total = Object.keys(CLASSES).length;
   return (
     <main class="screen menu">
@@ -51,10 +52,13 @@ export function Menu({ onPlay, onCodex, onHowTo, settings, onSettings }: Props) 
         <button class="btn" onClick={onCodex}>
           {t('Codex')} {store.codex.length}/{total}
         </button>
-        <button class="btn" onClick={onHowTo}>
-          {t('How to play')}
+        <button class="btn" onClick={onResults}>
+          {t('Results')}
         </button>
       </div>
+      <button class="btn wide" onClick={onHowTo}>
+        {t('How to play')}
+      </button>
 
       <div class="settings">
         <button class="chip" onClick={() => onSettings({ theme: THEMES[(THEMES.indexOf(settings.theme) + 1) % THEMES.length] })}>
