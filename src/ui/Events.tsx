@@ -5,7 +5,7 @@ import type { PatchOption } from '../game/patches';
 import { chipsFor, describeRule, matchRule, OPS, TARGETS } from '../game/rules';
 import { rankFor, type Run } from '../game/run';
 import { t } from '../i18n';
-import type { Rule, RuleOp, RuleTarget } from '../game/types';
+import type { AttackClass, Rule, RuleOp, RuleTarget } from '../game/types';
 import { RequestCard } from './RequestCard';
 
 // ---------------------------------------------------------------------------
@@ -56,7 +56,7 @@ export function Briefing({ run, onStart, onQuit }: { run: Run; onStart(): void; 
       )}
 
       {run.ruleEvent && <p class="intel">⚠ {t("Threat intel: a {name} wave is coming. You'll get to write a rule first.", { name: t(CLASSES[run.ruleEvent.cls].name) })}</p>}
-      {run.patchEvent && <p class="intel">🛠 {t('A dev ticket for {endpoint} will need your review mid-shift.', { endpoint: run.patchEvent.def.endpoint })}</p>}
+      {run.patchEvent && <p class="intel">🛠 {t('A pull request will need your code review mid-shift.')}</p>}
 
       <button class="btn big primary" onClick={onStart}>
         {t('Clock in')}
@@ -187,38 +187,110 @@ export const PATCH_LABEL: Record<PatchOption['kind'], string> = {
   breaks: '✗ Breaks the feature',
 };
 
-export function PatchScreen({ run, onChoose, onDone }: { run: Run; onChoose(i: number): void; onDone(): void }) {
+interface ReviewProps {
+  run: Run;
+  onVerdict(vulnerable: boolean): void;
+  onClass(cls: AttackClass): void;
+  onChoose(i: number): void;
+  onDone(): void;
+}
+
+export function PatchScreen({ run, onVerdict, onClass, onChoose, onDone }: ReviewProps) {
   const ev = run.patchEvent!;
+  const { def, step } = ev;
   const chosen = ev.chosen;
+  const answered = ev.saidVulnerable !== undefined;
+  const verdictRight = answered && ev.saidVulnerable === def.vulnerable;
+  const real = CLASSES[def.cls];
+  const fix = def.options.find((o) => o.kind === 'fix');
+  const allGood = def.vulnerable ? chosen?.kind === 'fix' : verdictRight;
   return (
     <main class="screen patch">
       <header class="bar">
-        <h1>{t('Dev ticket')}</h1>
-        <span class="muted">{t(CLASSES[ev.def.cls].short)}</span>
+        <h1>{t('Code review')}</h1>
+        <span class="muted">{def.lang}</span>
       </header>
       <p class="intel">
-        <b>{ev.def.endpoint}</b>: {t(ev.def.ticket).replace(/`/g, '')}. {t('Three PRs are open. Approve one.')}
+        <b>PR #{4100 + run.shift * 7}</b> {t(def.title)} <span class="muted">· {def.endpoint}</span>
       </p>
-      <pre class="code">{ev.def.code}</pre>
-      <div class="patches">
-        {ev.order.map((i, n) => {
-          const opt = ev.def.options[i];
-          const picked = chosen === opt;
-          return (
-            <button class={`patch-opt ${chosen ? `reveal ${opt.kind}` : ''} ${picked ? 'picked' : ''}`} disabled={!!chosen} onClick={() => onChoose(i)}>
-              <span class="patch-title">
-                PR #{4100 + n * 7 + run.shift} {chosen ? `· ${t(PATCH_LABEL[opt.kind])}` : ''}
-              </span>
-              <Diff text={opt.diff} />
-              {chosen && <span class="why">{t(opt.why).replace(/`/g, '')}</span>}
+      <pre class="code">{def.code}</pre>
+
+      {step === 'verdict' && (
+        <>
+          <h2 class="label">{t('Is this code vulnerable?')}</h2>
+          <div class="review-verdict">
+            <button class="btn big review-vuln" onClick={() => onVerdict(true)}>
+              🐛 {t('Vulnerable')}
             </button>
-          );
-        })}
-      </div>
-      {chosen && (
+            <button class="btn big review-safe" onClick={() => onVerdict(false)}>
+              ✓ {t('Looks safe')}
+            </button>
+          </div>
+        </>
+      )}
+
+      {answered && (!def.vulnerable || !verdictRight) && (
+        <p class={`review-result ${verdictRight ? 'ok' : 'bad'}`}>
+          <b>{verdictRight ? t('Correct.') : t('Wrong call.')}</b>{' '}
+          {def.vulnerable ? t('It is {name}.', { name: t(real.name) }) : t('This code is safe.')} {t(def.explain)}
+        </p>
+      )}
+
+      {step === 'class' && (
+        <>
+          <h2 class="label">{t('Which bug is it?')}</h2>
+          <div class="classes cols-2">
+            {ev.classChoices.map((c) => (
+              <button class="cls" onClick={() => onClass(c)}>
+                <span class="cls-icon">{CLASSES[c].icon}</span>
+                <span class="cls-name">{t(CLASSES[c].name)}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {ev.pickedClass && (
+        <p class={`review-result ${ev.pickedClass === def.cls ? 'ok' : 'bad'}`}>
+          <b>{ev.pickedClass === def.cls ? t('Correct.') : t('Not quite. It is {name}.', { name: t(real.name) })}</b> {t(def.explain)}
+        </p>
+      )}
+
+      {(step === 'fix' || chosen) && (
+        <>
+          <h2 class="label">{t('Three PRs claim to fix it. Approve one.')}</h2>
+          <div class="patches">
+            {ev.order.map((i, n) => {
+              const opt = def.options[i];
+              const picked = chosen === opt;
+              return (
+                <button class={`patch-opt ${chosen ? `reveal ${opt.kind}` : ''} ${picked ? 'picked' : ''}`} disabled={!!chosen} onClick={() => onChoose(i)}>
+                  <span class="patch-title">
+                    PR #{4101 + n + run.shift * 7} {chosen ? `· ${t(PATCH_LABEL[opt.kind])}` : ''}
+                  </span>
+                  <Diff text={opt.diff} />
+                  {chosen && <span class="why">{t(opt.why)}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {def.vulnerable && answered && !verdictRight && fix && (
+        <>
+          <h2 class="label">{t('The fix it needed')}</h2>
+          <div class="patch-opt reveal picked fix">
+            <Diff text={fix.diff} />
+            <span class="why">{t(fix.why)}</span>
+          </div>
+        </>
+      )}
+
+      {step === 'done' && (
         <div class="sticky-actions">
           <button class="btn big primary" onClick={onDone}>
-            {chosen.kind === 'fix' ? t('Merged. Back to the queue') : t('Back to the queue')}
+            {allGood ? t('Merged. Back to the queue') : t('Back to the queue')}
           </button>
         </div>
       )}
