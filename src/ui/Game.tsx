@@ -3,7 +3,7 @@ import { sfx } from '../audio';
 import { CLASSES } from '../game/codex';
 import { describeRule, matchedFields } from '../game/rules';
 import { explain as explainText, t } from '../i18n';
-import { Run, rankFor, type Outcome } from '../game/run';
+import { Run, rankFor, type Outcome, type Scenario } from '../game/run';
 import type { AttackClass, Difficulty, Speaker, Verdict } from '../game/types';
 import { store } from '../storage';
 import { Briefing, GameOver, PatchScreen, RuleEditor, ShiftReport } from './Events';
@@ -16,6 +16,10 @@ interface Props {
   haptics: boolean;
   onExit(): void;
   onRetry(): void;
+  /** Story mode: play this night instead of an endless run. */
+  scenario?: Scenario;
+  /** Story mode: the night is survived; the player moves on, or goes home with `quit`. */
+  onNightDone?(run: Run, quit?: boolean): void;
 }
 
 interface Toast {
@@ -58,10 +62,10 @@ function Pips({ label, value, max }: { label: string; value: number; max: number
   );
 }
 
-export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
+export function Game({ difficulty, seed, haptics, onExit, onRetry, scenario, onNightDone }: Props) {
   const runRef = useRef<Run>();
   if (!runRef.current) {
-    runRef.current = new Run(difficulty, seed);
+    runRef.current = new Run(scenario ?? difficulty, seed);
     runRef.current.startShift();
   }
   const run = runRef.current;
@@ -108,6 +112,8 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
     if (run.phase === 'over') {
       if (run.clockedOut) sfx.shiftEnd();
       else sfx.gameOver();
+      // Story nights are saved by the story, not on the endless board.
+      if (scenario) return;
       setResult(
         store.recordRun(difficulty, {
           score: run.score,
@@ -124,6 +130,8 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
 
   /** Go home between shifts. A run with nothing played yet just leaves without a board entry. */
   const clockOut = () => {
+    // A story night has no board entry: leaving the briefing drops the night, leaving the report banks it.
+    if (scenario) return run.phase === 'report' ? onNightDone?.(run, true) : onExit();
     if (run.shiftsCleared === 0 && run.phase === 'briefing') return onExit();
     run.clockOut();
     flush();
@@ -363,6 +371,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
           run={run}
           onQuit={clockOut}
           onNext={() => {
+            if (onNightDone) return onNightDone(run);
             run.startShift();
             rerender();
           }}
@@ -392,7 +401,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
         </div>
         <div class="hud-row small">
           <span class={run.lastCall ? 'clock last' : 'clock'}>
-            {t('S{shift}', { shift: run.shift })} · {run.lastCall ? t('LAST CALL') : mmss(run.clock)}
+            {run.night ? t('N{night}', { night: run.night }) : t('S{shift}', { shift: run.shift })} · {run.lastCall ? t('LAST CALL') : mmss(run.clock)}
           </span>
           <span class={run.quotaDone >= run.quota ? 'quota met' : 'quota'} aria-label={t('Quota {done} of {quota}', { done: run.quotaDone, quota: run.quota })}>
             ✓{Math.min(run.quotaDone, run.quota)}/{run.quota}

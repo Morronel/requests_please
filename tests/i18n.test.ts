@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { storyStrings } from '../src/game/campaign';
 import { CLASSES } from '../src/game/codex';
 import { DIFFICULTIES } from '../src/game/difficulty';
 import { DIRECTIVES } from '../src/game/directives';
@@ -73,6 +74,7 @@ function allKeys(): string[] {
     ...TARGETS.map((x) => x.label),
     ...OPS.map((x) => x.label),
     ...explanations(),
+    ...storyStrings(),
   ];
 }
 

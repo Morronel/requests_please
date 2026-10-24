@@ -8,11 +8,16 @@ import { Game } from './Game';
 import { HowTo } from './HowTo';
 import { Menu } from './Menu';
 import { Results } from './Results';
+import { StoryMode } from './Story';
 
-type Screen = { id: 'menu' } | { id: 'howto'; then?: Difficulty } | { id: 'codex' } | { id: 'results' } | { id: 'game'; difficulty: Difficulty; seed: number };
+type Next = Difficulty | 'story';
+type Screen = { id: 'menu' } | { id: 'howto'; then?: Next } | { id: 'codex' } | { id: 'results' } | { id: 'game'; difficulty: Difficulty; seed: number } | { id: 'story' };
+
+const screenFor = (next: Next): Screen => (next === 'story' ? { id: 'story' } : { id: 'game', difficulty: next, seed: randomSeed() });
 
 export function App() {
   const [screen, setScreen] = useState<Screen>({ id: 'menu' });
+  const [endless, setEndless] = useState(false);
   const [settings, setSettings] = useState<Settings>(store.settings);
   // Set before rendering children so every t() call below sees the chosen language.
   setLang(settings.lang);
@@ -28,24 +33,27 @@ export function App() {
     setSettings(store.settings);
   };
 
-  const play = (difficulty: Difficulty) => {
-    if (!store.seenIntro) return setScreen({ id: 'howto', then: difficulty });
-    setScreen({ id: 'game', difficulty, seed: randomSeed() });
+  const play = (next: Next) => {
+    setEndless(next !== 'story');
+    if (!store.seenIntro) return setScreen({ id: 'howto', then: next });
+    setScreen(screenFor(next));
   };
 
   switch (screen.id) {
     case 'menu':
-      return <Menu onPlay={play} onCodex={() => setScreen({ id: 'codex' })} onResults={() => setScreen({ id: 'results' })} onHowTo={() => setScreen({ id: 'howto' })} settings={settings} onSettings={updateSettings} />;
+      return <Menu onPlay={play} onStory={() => play('story')} endless={endless} onEndless={setEndless} onCodex={() => setScreen({ id: 'codex' })} onResults={() => setScreen({ id: 'results' })} onHowTo={() => setScreen({ id: 'howto' })} settings={settings} onSettings={updateSettings} />;
     case 'howto':
       return (
         <HowTo
-          cta={screen.then ? t('Start shift 1') : t('Back')}
+          cta={screen.then === 'story' ? t('Start night 1') : screen.then ? t('Start shift 1') : t('Back')}
           onDone={() => {
             store.markIntroSeen();
-            setScreen(screen.then ? { id: 'game', difficulty: screen.then, seed: randomSeed() } : { id: 'menu' });
+            setScreen(screen.then ? screenFor(screen.then) : { id: 'menu' });
           }}
         />
       );
+    case 'story':
+      return <StoryMode haptics={settings.haptics} onExit={() => setScreen({ id: 'menu' })} />;
     case 'codex':
       return <Codex onBack={() => setScreen({ id: 'menu' })} />;
     case 'results':
