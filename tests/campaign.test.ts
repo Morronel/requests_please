@@ -4,7 +4,7 @@ import { DIFFICULTIES } from '../src/game/difficulty';
 import { directiveById } from '../src/game/directives';
 import { Run } from '../src/game/run';
 
-/** Plays the current shift perfectly, deploying no rules and approving the real fix. */
+/** Plays the current shift perfectly, deploying no rules and reviewing code correctly. */
 function perfectNight(run: Run, think = 5) {
   run.resume();
   let guard = 0;
@@ -12,7 +12,12 @@ function perfectNight(run: Run, think = 5) {
     if (run.phase === 'rule') run.deployRule(null);
     else if (run.phase === 'auto') run.ackAuto();
     else if (run.phase === 'patch') {
-      run.choosePatch(run.patchEvent!.def.options.findIndex((o) => o.kind === 'fix'));
+      const def = run.patchEvent!.def;
+      run.reviewVerdict(def.vulnerable);
+      if (def.vulnerable) {
+        run.reviewClass(def.cls);
+        run.choosePatch(def.options.findIndex((o) => o.kind === 'fix'));
+      }
       run.finishPatch();
     } else {
       run.spend(think);

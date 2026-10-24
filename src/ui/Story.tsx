@@ -52,9 +52,10 @@ export function StoryMode({ haptics, onExit }: { haptics: boolean; onExit(): voi
       haptics={haptics}
       onExit={onExit}
       onRetry={() => setSeed(randomSeed())}
-      onNightDone={(run) => {
+      onNightDone={(run, quit) => {
         store.finishNight(run.score);
-        setPlaying(false);
+        if (quit) onExit();
+        else setPlaying(false);
       }}
     />
   );

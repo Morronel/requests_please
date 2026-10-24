@@ -18,8 +18,8 @@ interface Props {
   onRetry(): void;
   /** Story mode: play this night instead of an endless run. */
   scenario?: Scenario;
-  /** Story mode: the night is survived and the player moves on. */
-  onNightDone?(run: Run): void;
+  /** Story mode: the night is survived; the player moves on, or goes home with `quit`. */
+  onNightDone?(run: Run, quit?: boolean): void;
 }
 
 interface Toast {
@@ -81,7 +81,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry, scenario, onN
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [drawer, setDrawer] = useState(false);
   const [drag, setDrag] = useState(0);
-  const [best, setBest] = useState(false);
+  const [result, setResult] = useState({ best: false, place: -1 });
   const [held, setHeld] = useState(false);
   const stampTimer = useRef<number>();
   const autoTimer = useRef<number>();
@@ -110,17 +110,32 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry, scenario, onN
     if (fresh.length) pushToast({ tone: 'info', text: t('Codex unlocked: {names}', { names: fresh.map((c) => t(CLASSES[c].short)).join(', ') }) });
     if (run.phase === 'report') sfx.shiftEnd();
     if (run.phase === 'over') {
-      sfx.gameOver();
+      if (run.clockedOut) sfx.shiftEnd();
+      else sfx.gameOver();
+      // Story nights are saved by the story, not on the endless board.
       if (scenario) return;
-      setBest(
-        store.submitScore(difficulty, {
+      setResult(
+        store.recordRun(difficulty, {
           score: run.score,
           shift: run.shift,
+          cleared: run.shiftsCleared,
           accuracy: run.total.processed ? run.total.correct / run.total.processed : 0,
           rank: rankFor(run.score),
+          ended: run.clockedOut ? 'out' : 'fired',
+          at: Date.now(),
         }),
       );
     }
+  };
+
+  /** Go home between shifts. A run with nothing played yet just leaves without a board entry. */
+  const clockOut = () => {
+    // A story night has no board entry: leaving the briefing drops the night, leaving the report banks it.
+    if (scenario) return run.phase === 'report' ? onNightDone?.(run, true) : onExit();
+    if (run.shiftsCleared === 0 && run.phase === 'briefing') return onExit();
+    run.clockOut();
+    flush();
+    rerender();
   };
 
   const startClock = () => {
@@ -303,7 +318,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry, scenario, onN
       return (
         <Briefing
           run={run}
-          onQuit={onExit}
+          onQuit={clockOut}
           onStart={() => {
             sfx.shiftStart();
             run.resume();
@@ -327,8 +342,21 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry, scenario, onN
       return (
         <PatchScreen
           run={run}
+          onVerdict={(vulnerable) => {
+            const right = run.reviewVerdict(vulnerable);
+            if (right) sfx.correct();
+            else sfx.wrong();
+            rerender();
+          }}
+          onClass={(cls) => {
+            if (run.reviewClass(cls)) sfx.correct();
+            else sfx.wrong();
+            rerender();
+          }}
           onChoose={(i) => {
-            run.choosePatch(i);
+            const opt = run.choosePatch(i);
+            if (opt.kind === 'fix') sfx.deploy();
+            else sfx.wrong();
             rerender();
           }}
           onDone={() => {
@@ -341,7 +369,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry, scenario, onN
       return (
         <ShiftReport
           run={run}
-          onQuit={onExit}
+          onQuit={clockOut}
           onNext={() => {
             if (onNightDone) return onNightDone(run);
             run.startShift();
@@ -350,7 +378,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry, scenario, onN
         />
       );
     case 'over':
-      return <GameOver run={run} isBest={best} onRetry={onRetry} onMenu={onExit} />;
+      return <GameOver run={run} result={result} board={store.board(difficulty)} onRetry={onRetry} onMenu={onExit} />;
   }
 
   const req = run.current!;

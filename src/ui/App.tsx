@@ -7,10 +7,11 @@ import { Codex } from './Codex';
 import { Game } from './Game';
 import { HowTo } from './HowTo';
 import { Menu } from './Menu';
+import { Results } from './Results';
 import { StoryMode } from './Story';
 
 type Next = Difficulty | 'story';
-type Screen = { id: 'menu' } | { id: 'howto'; then?: Next } | { id: 'codex' } | { id: 'game'; difficulty: Difficulty; seed: number } | { id: 'story' };
+type Screen = { id: 'menu' } | { id: 'howto'; then?: Next } | { id: 'codex' } | { id: 'results' } | { id: 'game'; difficulty: Difficulty; seed: number } | { id: 'story' };
 
 const screenFor = (next: Next): Screen => (next === 'story' ? { id: 'story' } : { id: 'game', difficulty: next, seed: randomSeed() });
 
@@ -40,7 +41,7 @@ export function App() {
 
   switch (screen.id) {
     case 'menu':
-      return <Menu onPlay={play} onStory={() => play('story')} endless={endless} onEndless={setEndless} onCodex={() => setScreen({ id: 'codex' })} onHowTo={() => setScreen({ id: 'howto' })} settings={settings} onSettings={updateSettings} />;
+      return <Menu onPlay={play} onStory={() => play('story')} endless={endless} onEndless={setEndless} onCodex={() => setScreen({ id: 'codex' })} onResults={() => setScreen({ id: 'results' })} onHowTo={() => setScreen({ id: 'howto' })} settings={settings} onSettings={updateSettings} />;
     case 'howto':
       return (
         <HowTo
@@ -55,6 +56,8 @@ export function App() {
       return <StoryMode haptics={settings.haptics} onExit={() => setScreen({ id: 'menu' })} />;
     case 'codex':
       return <Codex onBack={() => setScreen({ id: 'menu' })} />;
+    case 'results':
+      return <Results onBack={() => setScreen({ id: 'menu' })} />;
     case 'game':
       return (
         <Game

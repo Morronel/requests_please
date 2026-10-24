@@ -14,6 +14,7 @@ interface Props {
   endless: boolean;
   onEndless(open: boolean): void;
   onCodex(): void;
+  onResults(): void;
   onHowTo(): void;
   settings: Settings;
   onSettings(patch: Partial<Settings>): void;
@@ -28,7 +29,7 @@ function storyStatus(): string {
   return t('continue: night {n} of {total} · {score}', { n: c.night, total: NIGHTS, score: c.score });
 }
 
-export function Menu({ onPlay, onStory, endless, onEndless: setEndless, onCodex, onHowTo, settings, onSettings }: Props) {
+export function Menu({ onPlay, onStory, endless, onEndless: setEndless, onCodex, onResults, onHowTo, settings, onSettings }: Props) {
   const total = Object.keys(CLASSES).length;
   const [confirmReset, setConfirmReset] = useState(false);
   const c = store.campaign;
@@ -104,10 +105,13 @@ export function Menu({ onPlay, onStory, endless, onEndless: setEndless, onCodex,
         <button class="btn" onClick={onCodex}>
           {t('Codex')} {store.codex.length}/{total}
         </button>
-        <button class="btn" onClick={onHowTo}>
-          {t('How to play')}
+        <button class="btn" onClick={onResults}>
+          {t('Results')}
         </button>
       </div>
+      <button class="btn wide" onClick={onHowTo}>
+        {t('How to play')}
+      </button>
 
       <div class="settings">
         <button class="chip" onClick={() => onSettings({ theme: THEMES[(THEMES.indexOf(settings.theme) + 1) % THEMES.length] })}>
