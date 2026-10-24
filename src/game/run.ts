@@ -57,6 +57,18 @@ export interface PatchEvent {
   chosen?: PatchOption;
 }
 
+/** A story night: a fixed config and directive set instead of an endless difficulty. */
+export interface Scenario {
+  cfg: DifficultyConfig;
+  night: number;
+  directives: string[];
+  /** Last night's directives, to mark what's new and what's retired. */
+  previous: string[];
+  wave?: Exclude<AttackClass, 'policy'>;
+  /** Story score banked before this night. */
+  carried: number;
+}
+
 interface Pending {
   fireIn: number;
   meter: 'integrity' | 'uptime';
@@ -138,6 +150,9 @@ export class Run {
   readonly cfg: DifficultyConfig;
   readonly rng: Rng;
   readonly seed: number;
+  /** Set in story mode: the night being played. Each night is one shift. */
+  readonly night?: number;
+  private readonly scenario?: Scenario;
 
   shift = 0;
   score = 0;
@@ -179,8 +194,14 @@ export class Run {
   seen = new Set<AttackClass>();
   overReason = '';
 
-  constructor(difficulty: Difficulty, seed: number) {
-    this.cfg = DIFFICULTIES[difficulty];
+  constructor(setup: Difficulty | Scenario, seed: number) {
+    if (typeof setup === 'string') this.cfg = DIFFICULTIES[setup];
+    else {
+      this.cfg = setup.cfg;
+      this.scenario = setup;
+      this.night = setup.night;
+      this.score = setup.carried;
+    }
     this.seed = seed;
     this.rng = new Rng(seed);
     this.integrity = this.cfg.meter;
@@ -231,8 +252,13 @@ export class Run {
     this.stats = emptyStats();
     this.newDirectives = [];
     this.retiredDirectives = [];
-    const next = this.directivePool.shift();
-    if (next) {
+    const sc = this.scenario;
+    const next = sc ? undefined : this.directivePool.shift();
+    if (sc) {
+      this.directives = [...sc.directives];
+      this.newDirectives = sc.directives.filter((id) => !sc.previous.includes(id));
+      this.retiredDirectives = sc.previous.filter((id) => !sc.directives.includes(id));
+    } else if (next) {
       if (this.directives.length >= this.cfg.maxDirectives) {
         const old = this.directives.shift()!;
         this.retiredDirectives.push(old);
@@ -248,10 +274,10 @@ export class Run {
     this.ruleDue = false;
     this.patchDue = false;
 
-    if (this.shift >= 2 && this.shift % 2 === 0) {
+    const pool = this.cfg.classes.filter((c): c is Exclude<AttackClass, 'policy'> => c !== 'policy');
+    const cls = sc ? sc.wave : this.shift >= 2 && this.shift % 2 === 0 ? this.rng.pick(pool) : undefined;
+    if (cls) {
       this.ruleDue = true;
-      const pool = this.cfg.classes.filter((c): c is Exclude<AttackClass, 'policy'> => c !== 'policy');
-      const cls = this.rng.pick(pool);
       this.ruleEvent = { cls, sample: generateRequest(this.ctx(), { kind: 'attack', cls }), testSet: this.testSet(cls) };
       // The wave: extra attacks of the same class spread through the first part of the shift.
       for (let i = 0; i < 4; i++) this.plan.set(this.rng.int(1, 12), { kind: 'attack', cls });

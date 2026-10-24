@@ -3,7 +3,7 @@ import { sfx } from '../audio';
 import { CLASSES } from '../game/codex';
 import { describeRule, matchedFields } from '../game/rules';
 import { explain as explainText, t } from '../i18n';
-import { Run, rankFor, type Outcome } from '../game/run';
+import { Run, rankFor, type Outcome, type Scenario } from '../game/run';
 import type { AttackClass, Difficulty, Speaker, Verdict } from '../game/types';
 import { store } from '../storage';
 import { Briefing, GameOver, PatchScreen, RuleEditor, ShiftReport } from './Events';
@@ -16,6 +16,10 @@ interface Props {
   haptics: boolean;
   onExit(): void;
   onRetry(): void;
+  /** Story mode: play this night instead of an endless run. */
+  scenario?: Scenario;
+  /** Story mode: the night is survived and the player moves on. */
+  onNightDone?(run: Run): void;
 }
 
 interface Toast {
@@ -58,10 +62,10 @@ function Pips({ label, value, max }: { label: string; value: number; max: number
   );
 }
 
-export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
+export function Game({ difficulty, seed, haptics, onExit, onRetry, scenario, onNightDone }: Props) {
   const runRef = useRef<Run>();
   if (!runRef.current) {
-    runRef.current = new Run(difficulty, seed);
+    runRef.current = new Run(scenario ?? difficulty, seed);
     runRef.current.startShift();
   }
   const run = runRef.current;
@@ -107,6 +111,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
     if (run.phase === 'report') sfx.shiftEnd();
     if (run.phase === 'over') {
       sfx.gameOver();
+      if (scenario) return;
       setBest(
         store.submitScore(difficulty, {
           score: run.score,
@@ -338,6 +343,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
           run={run}
           onQuit={onExit}
           onNext={() => {
+            if (onNightDone) return onNightDone(run);
             run.startShift();
             rerender();
           }}
@@ -367,7 +373,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
         </div>
         <div class="hud-row small">
           <span class={run.lastCall ? 'clock last' : 'clock'}>
-            {t('S{shift}', { shift: run.shift })} · {run.lastCall ? t('LAST CALL') : mmss(run.clock)}
+            {run.night ? t('N{night}', { night: run.night }) : t('S{shift}', { shift: run.shift })} · {run.lastCall ? t('LAST CALL') : mmss(run.clock)}
           </span>
           <span class={run.quotaDone >= run.quota ? 'quota met' : 'quota'} aria-label={t('Quota {done} of {quota}', { done: run.quotaDone, quota: run.quota })}>
             ✓{Math.min(run.quotaDone, run.quota)}/{run.quota}

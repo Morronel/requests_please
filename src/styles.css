@@ -264,6 +264,27 @@ h1 {
 .mode-hard {
   border-left-color: var(--bad);
 }
+.mode-story {
+  border-left-color: var(--warn);
+  min-height: 104px;
+}
+.mode.choice {
+  border-left-color: var(--line);
+}
+.mode.choice.on {
+  border-color: var(--accent);
+  border-left-color: var(--accent);
+  background: var(--panel-2);
+}
+.mode.choice:disabled:not(.on) {
+  opacity: 0.45;
+}
+.mode-head {
+  margin: 18px 0 8px;
+}
+.mode-head .label {
+  margin: 0;
+}
 .mode-name b {
   font-size: 1.1rem;
 }
@@ -376,6 +397,49 @@ h1 {
 .directives li.retired {
   text-decoration: line-through;
   color: var(--dim);
+}
+/* ------------------------------------------------------------------- story */
+
+.story-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin: 4px 0 14px;
+}
+.story-lines {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.story-lines li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+}
+.story-lines b {
+  font-size: 0.8rem;
+  color: var(--dim);
+}
+.story-lines .who-chad {
+  border-left-color: var(--warn);
+}
+.story-lines .who-crew {
+  border-left-color: var(--bad);
+}
+.story-lines .who-intern,
+.story-lines .who-system {
+  border-left-color: var(--line);
+}
+.story .btn.big.story-go {
+  margin-top: 20px;
+}
+.story-end h1 {
+  margin: 12px 0 8px;
 }
 .briefing .btn.big {
   margin-top: 20px;
@@ -1274,4 +1338,8 @@ h1 {
   .radio-eq i {
     animation: none;
   }
+}
+.big-stamp.ok {
+  color: var(--ok);
+  border-color: var(--ok);
 }

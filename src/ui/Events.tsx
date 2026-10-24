@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'preact/hooks';
+import { NIGHTS } from '../game/campaign';
 import { CLASSES } from '../game/codex';
 import { directiveById } from '../game/directives';
 import type { PatchOption } from '../game/patches';
@@ -20,7 +21,7 @@ export function Briefing({ run, onStart, onQuit }: { run: Run; onStart(): void; 
         <button class="btn small" onClick={onQuit}>
           ✕ {t('Quit')}
         </button>
-        <h1>{t('Shift {n}', { n: run.shift })}</h1>
+        <h1>{run.night ? t('Night {n} of {total}', { n: run.night, total: NIGHTS }) : t('Shift {n}', { n: run.shift })}</h1>
         <span class="muted">{t(run.cfg.title)}</span>
       </header>
       <p class="memo">
@@ -29,7 +30,7 @@ export function Briefing({ run, onStart, onQuit }: { run: Run; onStart(): void; 
         {t("{min} minutes on the clock, up to {s}s per request. Quota: {quota} correct calls, or you're out. Fast calls score more. Integrity {i}/{max}, Uptime {u}/{max}.", { min: run.cfg.shiftSeconds / 60, s: run.seconds, quota: run.quota, i: run.integrity, u: run.uptime, max: run.cfg.meter })}
       </p>
 
-      <h2 class="label">{t('Directives')}</h2>
+      {(ds.length > 0 || run.retiredDirectives.length > 0) && <h2 class="label">{t('Directives')}</h2>}
       <ul class="directives">
         {ds.map((d) => (
           <li class={d.isNew ? 'new' : ''}>
@@ -247,7 +248,7 @@ export function ShiftReport({ run, onNext, onQuit }: { run: Run; onNext(): void;
   const line = t(BLAMELESS[run.shift % BLAMELESS.length]);
   return (
     <main class="screen report">
-      <h1>{t('Postmortem: shift {n}', { n: run.shift })}</h1>
+      <h1>{run.night ? t('Postmortem: night {n}', { n: run.night }) : t('Postmortem: shift {n}', { n: run.shift })}</h1>
       <p class="muted">{t('Status: survived. Severity: {sev}.', { sev: s.fn ? `SEV-${Math.max(1, 4 - s.fn)}` : t('none') })}</p>
       <dl class="stats">
         <dt>{t('Quota')}</dt>
@@ -288,7 +289,7 @@ export function ShiftReport({ run, onNext, onQuit }: { run: Run; onNext(): void;
           {t('Clock out')}
         </button>
         <button class="btn big primary" onClick={onNext}>
-          {t('Next shift')}
+          {!run.night ? t('Next shift') : run.night < NIGHTS ? t('Next night') : t('See the morning')}
         </button>
       </div>
     </main>
@@ -308,8 +309,8 @@ export function GameOver({ run, isBest, onRetry, onMenu }: { run: Run; isBest: b
         </dd>
         <dt>{t('Rank')}</dt>
         <dd class="ok">{t(rankFor(run.score))}</dd>
-        <dt>{t('Reached shift')}</dt>
-        <dd>{run.shift}</dd>
+        <dt>{run.night ? t('Reached night') : t('Reached shift')}</dt>
+        <dd>{run.night ?? run.shift}</dd>
         <dt>{t('Accuracy')}</dt>
         <dd>{pct(tot.correct, tot.processed)}</dd>
         <dt>{t('Best streak')}</dt>
@@ -323,7 +324,7 @@ export function GameOver({ run, isBest, onRetry, onMenu }: { run: Run; isBest: b
           {t('Menu')}
         </button>
         <button class="btn big primary" onClick={onRetry}>
-          {t('New run')}
+          {run.night ? t('Retry the night') : t('New run')}
         </button>
       </div>
     </main>
