@@ -31,9 +31,16 @@ const WHO: Record<Speaker, string> = {
 };
 
 const STAMP_MS = 650;
+/** Longest real-time step the shift clock takes, so a backgrounded tab doesn't burn the shift. */
+const MAX_TICK_S = 0.5;
 const SWIPE_PX = 90;
 
 let toastSeq = 0;
+
+function mmss(seconds: number): string {
+  const s = Math.ceil(seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
 
 function Pips({ label, value, max }: { label: string; value: number; max: number }) {
   return (
@@ -58,8 +65,6 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   const [, setVersion] = useState(0);
   const rerender = () => setVersion((v) => v + 1);
 
-  const [deadline, setDeadline] = useState(0);
-  const [now, setNow] = useState(() => performance.now());
   const [classifier, setClassifier] = useState(false);
   const [stamp, setStamp] = useState<{ verdict: Verdict; cls?: AttackClass } | null>(null);
   const [feedback, setFeedback] = useState<Outcome | null>(null);
@@ -69,7 +74,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   const [drag, setDrag] = useState(0);
   const [best, setBest] = useState(false);
   const stampTimer = useRef<number>();
-  const pausedLeft = useRef<number | null>(null);
+  const paused = useRef(false);
   const bonusLost = useRef(false);
   const dragStart = useRef<{ x: number; y: number; active: boolean } | null>(null);
 
@@ -109,11 +114,8 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   };
 
   const startClock = () => {
-    const t = performance.now();
-    setNow(t);
-    setDeadline(t + run.seconds * 1000);
     bonusLost.current = false;
-    pausedLeft.current = null;
+    paused.current = false;
   };
 
   const afterAdvance = () => {
@@ -125,12 +127,10 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
     rerender();
   };
 
-  const timeLeftMs = () => (pausedLeft.current ?? deadline - now);
-  const fraction = Math.max(0, Math.min(1, timeLeftMs() / (run.seconds * 1000)));
+  const fraction = Math.max(0, Math.min(1, run.clock / run.cfg.shiftSeconds));
 
-  const commit = (verdict: Verdict, cls?: AttackClass, timedOut = false) => {
-    const frac = bonusLost.current || timedOut ? 0 : Math.max(0, (pausedLeft.current ?? deadline - performance.now()) / (run.seconds * 1000));
-    const out = run.judge(verdict, cls, frac, timedOut);
+  const commit = (verdict: Verdict, cls?: AttackClass) => {
+    const out = run.judge(verdict, cls, bonusLost.current);
     setFeedback(out);
     setExplain(out.kind !== 'tp' && out.kind !== 'tn');
     if (out.kind === 'fn' || out.kind === 'fp') buzz([60, 60, 60]);
@@ -140,7 +140,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
 
   const stage = (verdict: Verdict, cls?: AttackClass) => {
     if (stamp || run.phase !== 'request') return;
-    pausedLeft.current = Math.max(0, deadline - performance.now());
+    paused.current = true;
     setClassifier(false);
     setStamp({ verdict, cls });
     buzz(verdict === 'block' ? 40 : 15);
@@ -149,27 +149,31 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
 
   const undo = () => {
     window.clearTimeout(stampTimer.current);
-    const left = pausedLeft.current ?? 0;
-    pausedLeft.current = null;
+    paused.current = false;
     bonusLost.current = true;
-    const t = performance.now();
-    setNow(t);
-    setDeadline(t + left);
     setStamp(null);
   };
 
-  const cost = (seconds: number) => setDeadline((d) => d - seconds * 1000);
+  const cost = (seconds: number) => {
+    run.spend(seconds);
+    rerender();
+  };
 
-  // Request timer. Running out means the WAF fails open.
+  // Shift clock. It only runs while a request is on the desk and not mid-stamp, so
+  // briefings, rules and patches are free. At zero, the request on the desk is the last one.
   useEffect(() => {
     if (run.phase !== 'request') return;
-    const h = window.setInterval(() => setNow(performance.now()), 100);
+    let last = performance.now();
+    const h = window.setInterval(() => {
+      const t = performance.now();
+      const dt = Math.min(MAX_TICK_S, (t - last) / 1000);
+      last = t;
+      if (paused.current || run.lastCall) return;
+      run.spend(dt);
+      rerender();
+    }, 100);
     return () => window.clearInterval(h);
-  }, [run.phase, deadline]);
-
-  useEffect(() => {
-    if (run.phase === 'request' && !stamp && pausedLeft.current === null && deadline && now >= deadline) commit('allow', undefined, true);
-  });
+  }, [run.phase]);
 
   useEffect(() => () => window.clearTimeout(stampTimer.current), []);
 
@@ -287,15 +291,15 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
           </button>
         </div>
         <div class="hud-row small">
-          <span>
-            S{run.shift} · {run.index + 1}/{run.length}
+          <span class={run.lastCall ? 'clock last' : 'clock'}>
+            S{run.shift} · {run.lastCall ? 'LAST CALL' : mmss(run.clock)}
           </span>
           <span class="score">{run.score}</span>
           <span class={run.multiplier > 1 ? 'streak hot' : 'streak'}>
             {run.streak}🔥{run.multiplier > 1 ? ` ×${run.multiplier}` : ''}
           </span>
         </div>
-        <div class={`timer ${fraction < 0.3 ? 'low' : ''}`}>
+        <div class={`timer ${fraction < 0.15 ? 'low' : ''}`}>
           <i style={{ width: `${fraction * 100}%` }} />
         </div>
         <button class={`status ${feedback ? `fb-${feedback.kind}` : ''} ${explain ? 'open' : ''}`} onClick={() => setExplain(!explain)} disabled={!feedback}>
@@ -303,7 +307,10 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
             <>
               <span class="status-line">
                 <span class="prompt">&gt;</span> {feedback.title}
-                <b>{feedback.points > 0 ? `+${feedback.points}` : feedback.points}</b>
+                <b>
+                  {feedback.speedBonus > 0 && '⚡'}
+                  {feedback.points > 0 ? `+${feedback.points}` : feedback.points}
+                </b>
               </span>
               {explain && <span class="status-why">{feedback.truth.explain}</span>}
             </>

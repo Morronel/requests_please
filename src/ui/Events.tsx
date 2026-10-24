@@ -25,7 +25,7 @@ export function Briefing({ run, onStart, onQuit }: { run: Run; onStart(): void; 
       <p class="memo">
         <span class="muted">From:</span> CISO · <span class="muted">Re:</span> tonight
         <br />
-        {run.length} requests, {run.seconds}s each. Integrity {run.integrity}/{run.cfg.meter}, Uptime {run.uptime}/{run.cfg.meter}.
+        {run.cfg.shiftSeconds / 60} minutes on the clock. Every correct call scores, fast ones score more. Integrity {run.integrity}/{run.cfg.meter}, Uptime {run.uptime}/{run.cfg.meter}.
       </p>
 
       <h2 class="label">Directives</h2>
