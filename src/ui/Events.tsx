@@ -26,7 +26,7 @@ export function Briefing({ run, onStart, onQuit }: { run: Run; onStart(): void; 
       <p class="memo">
         <span class="muted">{t('From:')}</span> {t('CISO')} · <span class="muted">{t('Re:')}</span> {t('tonight')}
         <br />
-        {t('{n} requests, {s}s each. Integrity {i}/{max}, Uptime {u}/{max}.', { n: run.length, s: run.seconds, i: run.integrity, u: run.uptime, max: run.cfg.meter })}
+        {t("{min} minutes on the clock, up to {s}s per request. Quota: {quota} correct calls, or you're out. Fast calls score more. Integrity {i}/{max}, Uptime {u}/{max}.", { min: run.cfg.shiftSeconds / 60, s: run.seconds, quota: run.quota, i: run.integrity, u: run.uptime, max: run.cfg.meter })}
       </p>
 
       <h2 class="label">{t('Directives')}</h2>
@@ -250,6 +250,10 @@ export function ShiftReport({ run, onNext, onQuit }: { run: Run; onNext(): void;
       <h1>{t('Postmortem: shift {n}', { n: run.shift })}</h1>
       <p class="muted">{t('Status: survived. Severity: {sev}.', { sev: s.fn ? `SEV-${Math.max(1, 4 - s.fn)}` : t('none') })}</p>
       <dl class="stats">
+        <dt>{t('Quota')}</dt>
+        <dd class="ok">
+          {run.quotaDone}/{run.quota}
+        </dd>
         <dt>{t('Processed')}</dt>
         <dd>{s.processed}</dd>
         <dt>{t('Accuracy')}</dt>
