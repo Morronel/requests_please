@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
 import { randomSeed } from '../game/rng';
+import { setLang, t } from '../i18n';
 import type { Difficulty } from '../game/types';
 import { store, type Settings } from '../storage';
 import { Codex } from './Codex';
@@ -12,6 +13,8 @@ type Screen = { id: 'menu' } | { id: 'howto'; then?: Difficulty } | { id: 'codex
 export function App() {
   const [screen, setScreen] = useState<Screen>({ id: 'menu' });
   const [settings, setSettings] = useState<Settings>(store.settings);
+  // Set before rendering children so every t() call below sees the chosen language.
+  setLang(settings.lang);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -35,7 +38,7 @@ export function App() {
     case 'howto':
       return (
         <HowTo
-          cta={screen.then ? 'Start shift 1' : 'Back'}
+          cta={screen.then ? t('Start shift 1') : t('Back')}
           onDone={() => {
             store.markIntroSeen();
             setScreen(screen.then ? { id: 'game', difficulty: screen.then, seed: randomSeed() } : { id: 'menu' });

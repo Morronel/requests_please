@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { HttpRequest, Rule, RuleOp, RuleTarget } from './types';
 
 export const TARGETS: { id: RuleTarget; label: string }[] = [
@@ -49,10 +50,10 @@ export function matchRule(rule: Pick<Rule, 'target' | 'op' | 'value'>, req: Http
 }
 
 export function describeRule(rule: Pick<Rule, 'target' | 'op' | 'value'>): string {
-  if (rule.op === 'rateAbove') return `rate > ${rule.value} req/s`;
-  const t = TARGETS.find((x) => x.id === rule.target)?.label ?? rule.target;
-  const o = OPS.find((x) => x.id === rule.op)?.label ?? rule.op;
-  return `${t} ${o} "${rule.value}"`;
+  if (rule.op === 'rateAbove') return t('rate > {n} req/s', { n: rule.value });
+  const target = TARGETS.find((x) => x.id === rule.target)?.label ?? rule.target;
+  const op = OPS.find((x) => x.id === rule.op)?.label ?? rule.op;
+  return `${t(target)} ${t(op)} "${rule.value}"`;
 }
 
 /**

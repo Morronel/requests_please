@@ -303,6 +303,7 @@ h1 {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--panel);
+  min-width: 0;
 }
 .codex-head {
   width: 100%;

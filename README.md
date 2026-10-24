@@ -15,6 +15,7 @@ You're on night shift at Edge Node 7 after the board fired the ML firewall. HTTP
 - **Patch reviews**: pick the real fix out of three PRs (one is a blacklist, one breaks prod).
 - **Codex** that unlocks an explainer for each attack you meet.
 - Thumb-sized controls, swipe right to allow / left to block, a short undo, haptics, keyboard shortcuts (`A`, `B`, `1`-`0`, `U`).
+- **English or Ukrainian** interface, lore and dialogue (the 🌐 chip on the menu). HTTP requests always stay in English.
 - Offline-capable PWA, no backend. High scores live in your browser.
 
 ## Development
@@ -27,6 +28,8 @@ npm run build    # type-check and build to dist/
 ```
 
 The game logic lives in `src/game` and has no UI dependencies. Requests are generated from templates in `src/game/templates.ts` with a seeded RNG, so new attacks or bait are a few lines each. The UI is Preact in `src/ui`.
+
+Text goes through `t()` from `src/i18n`, gettext style: the English string is the key and `src/i18n/uk.ts` maps it to Ukrainian. `npm test` fails if any English string shown to the player has no Ukrainian translation.
 
 Add `#debug` to the URL to expose the current run as `window.__run` for automated playtests.
 

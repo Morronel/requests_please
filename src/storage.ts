@@ -1,4 +1,5 @@
 import type { AttackClass, Difficulty } from './game/types';
+import { detectLang, type Lang } from './i18n';
 
 export interface HighScore {
   score: number;
@@ -11,6 +12,7 @@ export interface Settings {
   theme: 'green' | 'amber' | 'ice';
   crt: boolean;
   haptics: boolean;
+  lang: Lang;
 }
 
 const KEY = 'requests-please:v1';
@@ -25,7 +27,7 @@ interface Saved {
 const DEFAULTS: Saved = {
   high: {},
   codex: [],
-  settings: { theme: 'green', crt: true, haptics: true },
+  settings: { theme: 'green', crt: true, haptics: true, lang: 'en' },
   seenIntro: false,
 };
 
@@ -33,9 +35,8 @@ const DEFAULTS: Saved = {
 function load(): Saved {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return structuredClone(DEFAULTS);
-    const parsed = JSON.parse(raw) as Partial<Saved>;
-    return { ...DEFAULTS, ...parsed, settings: { ...DEFAULTS.settings, ...parsed.settings } };
+    const parsed = (raw ? JSON.parse(raw) : {}) as Partial<Saved>;
+    return { ...structuredClone(DEFAULTS), ...parsed, settings: { ...DEFAULTS.settings, lang: detectLang(), ...parsed.settings } };
   } catch {
     return structuredClone(DEFAULTS);
   }
