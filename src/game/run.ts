@@ -1,5 +1,5 @@
 import { CLASSES } from './codex';
-import { DIFFICULTIES, secondsFor, shiftLength, type DifficultyConfig } from './difficulty';
+import { DIFFICULTIES, quotaFor, secondsFor, type DifficultyConfig } from './difficulty';
 import { directiveById } from './directives';
 import { directiveOrder, generateRequest, type GenContext, type GenOptions } from './generator';
 import { PATCHES, type PatchDef, type PatchOption } from './patches';
@@ -18,6 +18,8 @@ export interface Outcome {
   points: number;
   title: string;
   truth: Truth;
+  /** Speed bonus included in `points`, before the streak multiplier. */
+  speedBonus: number;
   timedOut: boolean;
 }
 
@@ -74,13 +76,19 @@ const emptyStats = (): ShiftStats => ({
 
 export const RANKS: [number, string][] = [
   [0, 'Script Kiddie'],
-  [400, 'Packet Pusher'],
-  [1200, 'Log Goblin'],
-  [2500, 'SOC Analyst'],
-  [4500, 'Threat Hunter'],
-  [7500, '0day Whisperer'],
-  [12000, 'root'],
+  [600, 'Packet Pusher'],
+  [1800, 'Log Goblin'],
+  [3800, 'SOC Analyst'],
+  [7000, 'Threat Hunter'],
+  [11500, '0day Whisperer'],
+  [18000, 'root'],
 ];
+
+/** Points for a correct call, before the speed bonus and streak multiplier. */
+export const POINTS = { allow: 15, bait: 5, block: 30, speed: 15 };
+
+/** Shift-clock seconds an auto-blocked request takes, so a catch-all rule can't spin forever. */
+const AUTO_BLOCK_SECONDS = 1;
 
 export function rankFor(score: number): string {
   let name = RANKS[0][1];
@@ -146,10 +154,14 @@ export class Run {
 
   phase: Phase = 'briefing';
   current: HttpRequest | null = null;
+  /** Requests that reached the desk or the rules this shift. */
   index = 0;
-  length = 0;
-  private plan: GenOptions[] = [];
-  private events = new Map<number, 'rule' | 'patch'>();
+  /** Seconds left on the shift clock. When it hits zero, the request on the desk is the last one. */
+  clock = 0;
+  private dealtAt = 0;
+  private plan = new Map<number, GenOptions>();
+  private ruleDue = false;
+  private patchDue = false;
   ruleEvent?: RuleEvent;
   patchEvent?: PatchEvent;
 
@@ -173,8 +185,28 @@ export class Run {
     this.directivePool = directiveOrder(this.rng);
   }
 
+  /** Spend shift-clock time: real time on the desk, plus tool costs. */
+  spend(seconds: number): void {
+    this.clock = Math.max(0, this.clock - seconds);
+  }
+
+  /** Per-request timer for this shift. */
   get seconds(): number {
     return secondsFor(this.cfg, this.shift);
+  }
+
+  /** Correct calls needed to finish this shift. */
+  get quota(): number {
+    return quotaFor(this.cfg, this.shift);
+  }
+
+  /** Progress toward the quota: your correct calls plus your rules' catches. */
+  get quotaDone(): number {
+    return this.stats.correct + this.stats.autoCaught;
+  }
+
+  get lastCall(): boolean {
+    return this.clock <= 0;
   }
 
   get multiplier(): number {
@@ -207,29 +239,27 @@ export class Run {
       this.newDirectives.push(next);
     }
 
-    this.length = shiftLength(this.cfg, this.shift);
-    this.plan = Array.from({ length: this.length }, () => ({}));
+    this.clock = this.cfg.shiftSeconds;
+    this.plan.clear();
     this.index = 0;
-    this.events.clear();
+    this.ruleDue = false;
+    this.patchDue = false;
 
     if (this.shift >= 2 && this.shift % 2 === 0) {
-      this.events.set(0, 'rule');
+      this.ruleDue = true;
       const pool = this.cfg.classes.filter((c): c is Exclude<AttackClass, 'policy'> => c !== 'policy');
       const cls = this.rng.pick(pool);
       this.ruleEvent = { cls, sample: generateRequest(this.ctx(), { kind: 'attack', cls }), testSet: this.testSet(cls) };
-      // The wave: extra attacks of the same class spread through the shift.
-      for (let i = 0; i < 4; i++) this.plan[this.rng.int(1, this.length - 1)] = { kind: 'attack', cls };
+      // The wave: extra attacks of the same class spread through the first part of the shift.
+      for (let i = 0; i < 4; i++) this.plan.set(this.rng.int(1, 12), { kind: 'attack', cls });
     }
 
     if (this.cfg.patches) {
       const open = PATCHES.filter((p) => this.cfg.classes.includes(p.cls) && !this.patched.has(`${p.cls}@${p.endpoint}`));
       if (open.length) {
         const def = this.rng.pick(open);
-        const at = Math.floor(this.length / 2);
-        this.events.set(at, 'patch');
+        this.patchDue = true;
         this.patchEvent = { def, order: this.rng.shuffle([0, 1, 2]) };
-        // Make sure the patched endpoint gets tested soon after.
-        for (let i = 1; i <= 2 && at + i * 2 < this.length; i++) this.plan[at + i * 2] = { kind: 'attack', cls: def.cls as Exclude<AttackClass, 'policy'> };
       }
     }
     this.phase = 'briefing';
@@ -251,19 +281,29 @@ export class Run {
 
   private advance(): void {
     while (this.phase !== 'over') {
-      if (this.index >= this.length) return this.endShift();
-      const ev = this.events.get(this.index);
-      if (ev) {
-        this.events.delete(this.index);
-        this.phase = ev;
+      if (this.clock <= 0) return this.endShift();
+      if (this.ruleDue) {
+        this.ruleDue = false;
+        this.phase = 'rule';
         this.current = null;
         return;
       }
-      const req = generateRequest(this.ctx(), this.plan[this.index]);
+      if (this.patchDue && this.clock <= this.cfg.shiftSeconds / 2) {
+        this.patchDue = false;
+        // Make sure the patched endpoint gets tested soon after.
+        const cls = this.patchEvent!.def.cls as Exclude<AttackClass, 'policy'>;
+        for (const i of [2, 4]) this.plan.set(this.index + i, { kind: 'attack', cls });
+        this.phase = 'patch';
+        this.current = null;
+        return;
+      }
+      const req = generateRequest(this.ctx(), this.plan.get(this.index) ?? {});
+      this.plan.delete(this.index);
       const rule = this.rules.find((r) => matchRule(r, req));
       if (rule) {
         this.autoBlock(rule, req);
         this.index++;
+        this.spend(AUTO_BLOCK_SECONDS);
         this.tick();
         continue;
       }
@@ -272,6 +312,7 @@ export class Run {
         this.ping(who, text);
       }
       this.current = req;
+      this.dealtAt = this.clock;
       this.phase = 'request';
       return;
     }
@@ -302,12 +343,19 @@ export class Run {
     this.stats.score += points;
   }
 
-  /** Player verdict on the current request. `timeLeft` is 0..1 of the request timer. */
-  judge(verdict: Verdict, picked?: AttackClass, timeLeft = 0, timedOut = false): Outcome {
+  /**
+   * Player verdict on the current request. Correct calls earn a speed bonus that
+   * fades from full at `parSeconds` to nothing at twice that; `noBonus` skips it (after an undo).
+   * `timedOut` means the request timer ran out and the WAF failed open.
+   */
+  judge(verdict: Verdict, picked?: AttackClass, noBonus = false, timedOut = false): Outcome {
     const req = this.current;
     if (!req || this.phase !== 'request') throw new Error('no request to judge');
     const t = req.truth;
-    const timeBonus = Math.round(10 * Math.max(0, Math.min(1, timeLeft)));
+    const took = this.dealtAt - this.clock;
+    const par = this.cfg.parSeconds;
+    const timeBonus = noBonus || timedOut ? 0 : Math.round(POINTS.speed * Math.max(0, Math.min(1, 2 - took / par)));
+    let speedBonus = 0;
     const cls = t.cls ? CLASSES[t.cls].short : '';
     let kind: OutcomeKind;
     let points: number;
@@ -316,7 +364,8 @@ export class Run {
     if (verdict === 'allow') {
       if (!t.malicious || t.harmless) {
         kind = 'tn';
-        points = 10 + (t.bait ? 5 : 0) + timeBonus;
+        speedBonus = timeBonus;
+        points = POINTS.allow + (t.bait ? POINTS.bait : 0) + timeBonus;
         title = t.harmless ? `200 OK: ${cls} bounced off the patch` : t.bait ? '200 OK: nice, not fooled' : '200 OK';
       } else {
         kind = 'fn';
@@ -330,7 +379,8 @@ export class Run {
     } else if (t.malicious) {
       if (picked === t.cls) {
         kind = 'tp';
-        points = 25 + timeBonus;
+        speedBonus = timeBonus;
+        points = POINTS.block + timeBonus;
         title = `403 Blocked: ${cls}, correct`;
       } else {
         kind = 'wrongclass';
@@ -364,7 +414,7 @@ export class Run {
     this.current = null;
     this.tick();
     this.advance();
-    return { kind, verdict, picked, points, title, truth: t, timedOut };
+    return { kind, verdict, picked, points, title, truth: t, speedBonus, timedOut };
   }
 
   /** Count down delayed consequences and fire the due ones. */
@@ -394,6 +444,9 @@ export class Run {
     const due = this.pending;
     this.pending = [];
     due.forEach((p) => this.fire(p));
+    if (this.phase !== 'over' && this.quotaDone < this.quota) {
+      this.gameOver(`Quota missed: ${this.quotaDone} of ${this.quota} correct calls. HR has scheduled a "quick chat".`);
+    }
     if (this.phase !== 'over') this.phase = 'report';
     this.current = null;
   }

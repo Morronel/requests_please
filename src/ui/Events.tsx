@@ -25,7 +25,7 @@ export function Briefing({ run, onStart, onQuit }: { run: Run; onStart(): void; 
       <p class="memo">
         <span class="muted">From:</span> CISO · <span class="muted">Re:</span> tonight
         <br />
-        {run.length} requests, {run.seconds}s each. Integrity {run.integrity}/{run.cfg.meter}, Uptime {run.uptime}/{run.cfg.meter}.
+        {run.cfg.shiftSeconds / 60} minutes on the clock, up to {run.seconds}s per request. Quota: {run.quota} correct calls, or you're out. Fast calls score more. Integrity {run.integrity}/{run.cfg.meter}, Uptime {run.uptime}/{run.cfg.meter}.
       </p>
 
       <h2 class="label">Directives</h2>
@@ -249,6 +249,10 @@ export function ShiftReport({ run, onNext, onQuit }: { run: Run; onNext(): void;
       <h1>Postmortem: shift {run.shift}</h1>
       <p class="muted">Status: survived. Severity: {s.fn ? `SEV-${Math.max(1, 4 - s.fn)}` : 'none'}.</p>
       <dl class="stats">
+        <dt>Quota</dt>
+        <dd class="ok">
+          {run.quotaDone}/{run.quota}
+        </dd>
         <dt>Processed</dt>
         <dd>{s.processed}</dd>
         <dt>Accuracy</dt>

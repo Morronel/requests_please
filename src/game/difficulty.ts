@@ -12,8 +12,16 @@ export interface DifficultyConfig {
   attackShare: number;
   /** Share of legit traffic that is scary-looking bait. */
   baitShare: number;
+  /** Fixed length of every shift on the clock. */
+  shiftSeconds: number;
+  /** Per-request timer on shift 1; it shrinks 5% per shift down to the floor. Running out fails open. */
   secondsStart: number;
   secondsFloor: number;
+  /** Correct calls needed on shift 1 to keep the job; +1 per shift, up to `quotaMax`. */
+  quota: number;
+  quotaMax: number;
+  /** A verdict this fast or faster earns the full speed bonus; slower ones earn less, never a penalty. */
+  parSeconds: number;
   maxDirectives: number;
   ruleSlots: number;
   patches: boolean;
@@ -21,7 +29,6 @@ export interface DifficultyConfig {
   meter: number;
   /** Wrong class on a correct block. */
   wrongClassPoints: number;
-  shiftLength: number;
   /** How often IP reputation gives the answer away. */
   reputationTells: number;
 }
@@ -40,15 +47,18 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
     encodings: ['url'],
     attackShare: 0.45,
     baitShare: 0.12,
-    secondsStart: 20,
-    secondsFloor: 12,
+    shiftSeconds: 180,
+    secondsStart: 70,
+    secondsFloor: 42,
+    quota: 8,
+    quotaMax: 14,
+    parSeconds: 12,
     maxDirectives: 3,
     ruleSlots: 3,
     patches: false,
     hints: true,
     meter: 5,
     wrongClassPoints: 10,
-    shiftLength: 12,
     reputationTells: 0.7,
   },
   medium: {
@@ -60,15 +70,18 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
     encodings: ['url', 'base64', 'html'],
     attackShare: 0.5,
     baitShare: 0.25,
-    secondsStart: 15,
-    secondsFloor: 8,
+    shiftSeconds: 180,
+    secondsStart: 52,
+    secondsFloor: 28,
+    quota: 10,
+    quotaMax: 16,
+    parSeconds: 9,
     maxDirectives: 5,
     ruleSlots: 3,
     patches: true,
     hints: false,
     meter: 4,
     wrongClassPoints: 10,
-    shiftLength: 16,
     reputationTells: 0.4,
   },
   hard: {
@@ -80,24 +93,27 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyConfig> = {
     encodings: ['url', 'base64', 'html', 'hex'],
     attackShare: 0.5,
     baitShare: 0.4,
-    secondsStart: 12,
-    secondsFloor: 5,
+    shiftSeconds: 180,
+    secondsStart: 42,
+    secondsFloor: 18,
+    quota: 12,
+    quotaMax: 18,
+    parSeconds: 7,
     maxDirectives: 8,
     ruleSlots: 2,
     patches: true,
     hints: false,
     meter: 3,
     wrongClassPoints: 12,
-    shiftLength: 20,
     reputationTells: 0.2,
   },
 };
 
-/** Timer shrinks about 5% per shift until the floor. */
+/** Per-request timer, about 3.5x the original pace. Shrinks about 5% per shift until the floor. */
 export function secondsFor(cfg: DifficultyConfig, shift: number): number {
   return Math.max(cfg.secondsFloor, Math.round(cfg.secondsStart * Math.pow(0.95, shift - 1)));
 }
 
-export function shiftLength(cfg: DifficultyConfig, shift: number): number {
-  return Math.min(25, cfg.shiftLength + (shift - 1));
+export function quotaFor(cfg: DifficultyConfig, shift: number): number {
+  return Math.min(cfg.quotaMax, cfg.quota + shift - 1);
 }

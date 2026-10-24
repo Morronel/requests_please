@@ -10,6 +10,7 @@ You're on night shift at Edge Node 7 after the board fired the ML firewall. HTTP
 - **13 attack classes** with real payloads: SQLi, XSS, path traversal, scanners, command injection, SSRF, credential stuffing, open redirect, SSTI, Log4Shell, XXE, JWT tampering, request smuggling. Plus **policy** violations against the shift's directives.
 - **Bait traffic** that looks scary but isn't (hello, Mr. O'Brien).
 - **Decoder tray**: URL, Base64, HTML entities, hex escapes, stacked up to 3 layers on Hard. JWT inspector, IP lookup, rate graph, endpoint notes.
+- **Fixed 3-minute shifts** with a quota of correct calls to keep the job, a relaxed per-request timer (the WAF fails open if it runs out), and a speed bonus for fast correct calls.
 - **Directives** that pile up each shift, Papers, Please style.
 - **Rule writing** by tapping, with a live dry run against sample traffic.
 - **Patch reviews**: pick the real fix out of three PRs (one is a blacklist, one breaks prod).
