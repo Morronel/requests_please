@@ -13,6 +13,10 @@ interface Props {
   /** Spend clock time on a tool. */
   onCost?(seconds: number): void;
   compact?: boolean;
+  /** Field ids a WAF rule matched, lit up while the rule fires. */
+  hits?: string[];
+  /** A rate rule fired, so light up the traffic graph. */
+  rateHit?: boolean;
 }
 
 /** Headers that never carry payloads in this game, so Easy-mode hints skip them. */
@@ -20,14 +24,14 @@ const QUIET_HEADERS = new Set(['Host', 'Accept', 'Cookie', 'Content-Type', 'Cont
 
 type Panel = 'decode' | 'ip' | 'notes' | 'jwt' | 'rate';
 
-export function Sparkline({ values, onTap }: { values: number[]; onTap?(): void }) {
+export function Sparkline({ values, onTap, lit }: { values: number[]; onTap?(): void; lit?: boolean }) {
   const max = Math.max(4, ...values);
   const w = 72;
   const h = 22;
   const pts = values.map((v, i) => `${(i / (values.length - 1)) * w},${h - (v / max) * (h - 2) - 1}`).join(' ');
   const hot = Math.max(...values) >= 10;
   return (
-    <button class={`spark ${hot ? 'hot' : ''}`} onClick={onTap} aria-label={t('Request rate')}>
+    <button class={`spark ${hot ? 'hot' : ''} ${lit ? 'hit' : ''}`} onClick={onTap} aria-label={t('Request rate')}>
       <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
         <polyline points={pts} fill="none" stroke="currentColor" stroke-width="2" />
       </svg>
@@ -51,7 +55,7 @@ function prettyJson(s: string): string {
   }
 }
 
-export function RequestCard({ req, cfg, onCost, compact }: Props) {
+export function RequestCard({ req, cfg, onCost, compact, hits, rateHit }: Props) {
   const [sel, setSel] = useState<Field | null>(null);
   const [panel, setPanel] = useState<Panel>('decode');
   const [stacks, setStacks] = useState<Record<string, string[]>>({});
@@ -91,7 +95,7 @@ export function RequestCard({ req, cfg, onCost, compact }: Props) {
     const hint = cfg.hints && !compact && f.kind !== 'method' && !QUIET_HEADERS.has(f.key ?? '') && smells(f.raw);
     return (
       <span class="tokwrap">
-        <button class={`tok ${cls} ${sel?.id === f.id ? 'sel' : ''} ${hint ? 'hint' : ''}`} onClick={() => select(f, p)}>
+        <button class={`tok ${cls} ${sel?.id === f.id ? 'sel' : ''} ${hint ? 'hint' : ''} ${hits?.includes(f.id) ? 'hit' : ''}`} onClick={() => select(f, p)}>
           {(compact ? f.plain : f.raw) || t('(empty)')}
         </button>
         {layers?.length ? <span class="decoded">↳ {layers.at(-1)}</span> : null}
@@ -106,7 +110,7 @@ export function RequestCard({ req, cfg, onCost, compact }: Props) {
     <div class={`req ${compact ? 'compact' : ''}`}>
       <div class="req-from">
         <span class="muted">{t('from')}</span> {tok(req.ip, 'ip', 'ip')}
-        <Sparkline values={req.rate} onTap={compact ? undefined : () => select(req.ip, 'rate')} />
+        <Sparkline values={req.rate} lit={rateHit} onTap={compact ? undefined : () => select(req.ip, 'rate')} />
       </div>
       <div class="req-line">
         <span class="method">{req.method.raw}</span> {tok(req.path, 'path', 'notes')}

@@ -8,7 +8,8 @@ import { Rng } from './rng';
 import { matchRule } from './rules';
 import type { AttackClass, ChatPing, Difficulty, HttpRequest, Rule, Speaker, Truth, Verdict } from './types';
 
-export type Phase = 'briefing' | 'request' | 'rule' | 'patch' | 'report' | 'over';
+/** `auto` means a deployed rule fired on the request on the desk; the player watches, then moves on. */
+export type Phase = 'briefing' | 'request' | 'auto' | 'rule' | 'patch' | 'report' | 'over';
 
 export type OutcomeKind = 'tp' | 'tn' | 'fp' | 'fn' | 'wrongclass';
 
@@ -169,7 +170,8 @@ export class Run {
   private pending: Pending[] = [];
   private collateralHits = 0;
   pings: ChatPing[] = [];
-  autoBlocks: AutoBlock[] = [];
+  /** The rule hit on the desk while `phase` is `auto`. */
+  autoHit?: AutoBlock;
   private pingSeq = 0;
 
   total = emptyStats();
@@ -303,10 +305,9 @@ export class Run {
       const rule = this.rules.find((r) => matchRule(r, req));
       if (rule) {
         this.autoBlock(rule, req);
-        this.index++;
-        this.spend(AUTO_BLOCK_SECONDS);
-        this.tick();
-        continue;
+        this.current = req;
+        this.phase = 'auto';
+        return;
       }
       if (this.rng.chance(0.08)) {
         const [who, text] = this.rng.pick(FLAVOR);
@@ -336,7 +337,18 @@ export class Run {
     }
     if (req.truth.cls) this.seen.add(req.truth.cls);
     this.addScore(points);
-    this.autoBlocks.push({ rule, req, good, points });
+    this.autoHit = { rule, req, good, points };
+  }
+
+  /** Move on from a rule hit to the next request. */
+  ackAuto(): void {
+    if (this.phase !== 'auto') throw new Error('no rule hit to acknowledge');
+    this.autoHit = undefined;
+    this.current = null;
+    this.index++;
+    this.spend(AUTO_BLOCK_SECONDS);
+    this.tick();
+    if ((this.phase as Phase) !== 'over') this.advance();
   }
 
   private addScore(points: number): void {
@@ -463,6 +475,7 @@ export class Run {
 
   removeRule(id: string): void {
     this.rules = this.rules.filter((r) => r.id !== id);
+    this.ping('system', tr('rule {rule} removed', { rule: id }));
   }
 
   choosePatch(optionIndex: number): PatchOption {
@@ -494,12 +507,6 @@ export class Run {
     const p = this.pings;
     this.pings = [];
     return p;
-  }
-
-  drainAutoBlocks(): AutoBlock[] {
-    const a = this.autoBlocks;
-    this.autoBlocks = [];
-    return a;
   }
 
   directiveTexts(): { id: string; title: string; text: string; isNew: boolean }[] {

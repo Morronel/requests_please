@@ -1,5 +1,5 @@
 import { t } from '../i18n';
-import type { HttpRequest, Rule, RuleOp, RuleTarget } from './types';
+import type { Field, HttpRequest, Rule, RuleOp, RuleTarget } from './types';
 
 export const TARGETS: { id: RuleTarget; label: string }[] = [
   { id: 'path', label: 'Path' },
@@ -17,36 +17,50 @@ export const OPS: { id: RuleOp; label: string }[] = [
   { id: 'equals', label: 'equals' },
 ];
 
-/** Decoded values a rule looks at. WAFs normalise before matching, and so do we. */
-export function valuesFor(target: RuleTarget, req: HttpRequest): string[] {
+/** Fields a rule looks at. Rate rules look at the traffic graph, not a field. */
+function fieldsFor(target: RuleTarget, req: HttpRequest): Field[] {
   switch (target) {
     case 'path':
-      return [req.path.plain];
+      return [req.path];
     case 'query':
-      return req.query.map((q) => q.plain);
+      return req.query;
     case 'body':
-      return req.body ? [req.body.plain] : [];
+      return req.body ? [req.body] : [];
     case 'header':
-      return req.headers.map((h) => h.plain);
+      return req.headers;
     case 'ua':
-      return req.headers.filter((h) => h.key === 'User-Agent').map((h) => h.plain);
+      return req.headers.filter((h) => h.key === 'User-Agent');
     case 'ip':
-      return [req.ip.plain];
+      return [req.ip];
     case 'rate':
-      return [String(Math.max(...req.rate))];
+      return [];
   }
 }
 
-export function matchRule(rule: Pick<Rule, 'target' | 'op' | 'value'>, req: HttpRequest): boolean {
-  const values = valuesFor(rule.target, req);
-  if (rule.op === 'rateAbove') return values.some((v) => Number(v) > Number(rule.value));
+/** Decoded values a rule looks at. WAFs normalise before matching, and so do we. */
+export function valuesFor(target: RuleTarget, req: HttpRequest): string[] {
+  if (target === 'rate') return [String(Math.max(...req.rate))];
+  return fieldsFor(target, req).map((f) => f.plain);
+}
+
+function hit(rule: Pick<Rule, 'op' | 'value'>, raw: string): boolean {
+  if (rule.op === 'rateAbove') return Number(raw) > Number(rule.value);
+  const v = raw.toLowerCase();
   const needle = rule.value.toLowerCase();
-  return values.some((raw) => {
-    const v = raw.toLowerCase();
-    if (rule.op === 'contains') return v.includes(needle);
-    if (rule.op === 'startsWith') return v.startsWith(needle);
-    return v === needle;
-  });
+  if (rule.op === 'contains') return v.includes(needle);
+  if (rule.op === 'startsWith') return v.startsWith(needle);
+  return v === needle;
+}
+
+export function matchRule(rule: Pick<Rule, 'target' | 'op' | 'value'>, req: HttpRequest): boolean {
+  return valuesFor(rule.target, req).some((v) => hit(rule, v));
+}
+
+/** Ids of the fields that made a rule fire, so the card can light them up. */
+export function matchedFields(rule: Pick<Rule, 'target' | 'op' | 'value'>, req: HttpRequest): string[] {
+  return fieldsFor(rule.target, req)
+    .filter((f) => hit(rule, f.plain))
+    .map((f) => f.id);
 }
 
 export function describeRule(rule: Pick<Rule, 'target' | 'op' | 'value'>): string {

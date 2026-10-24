@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { sfx } from '../audio';
 import { CLASSES } from '../game/codex';
-import { describeRule } from '../game/rules';
+import { describeRule, matchedFields } from '../game/rules';
 import { explain as explainText, t } from '../i18n';
 import { Run, rankFor, type Outcome } from '../game/run';
 import type { AttackClass, Difficulty, Speaker, Verdict } from '../game/types';
@@ -34,6 +34,8 @@ export const WHO: Record<Speaker, string> = {
 };
 
 const STAMP_MS = 650;
+/** How long a rule hit stays on the desk before the next request; collateral lingers so it sinks in. */
+const AUTO_MS = { good: 2200, bad: 3800 };
 /** Longest real-time step the shift clock takes, so a backgrounded tab doesn't burn the shift. */
 const MAX_TICK_S = 0.5;
 const SWIPE_PX = 90;
@@ -76,7 +78,9 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   const [drawer, setDrawer] = useState(false);
   const [drag, setDrag] = useState(0);
   const [best, setBest] = useState(false);
+  const [held, setHeld] = useState(false);
   const stampTimer = useRef<number>();
+  const autoTimer = useRef<number>();
   const paused = useRef(false);
   const requestLeft = useRef(0);
   const bonusLost = useRef(false);
@@ -92,18 +96,8 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
     window.setTimeout(() => setToasts((ts) => ts.filter((x) => x.id !== id)), ms);
   };
 
-  /** Pull pings, auto-blocks and codex unlocks out of the run into toasts. */
+  /** Pull pings and codex unlocks out of the run into toasts. */
   const flush = () => {
-    for (const a of run.drainAutoBlocks()) {
-      if (a.good) sfx.zap();
-      else sfx.wrong();
-      const name = a.req.truth.cls ? t(CLASSES[a.req.truth.cls].short) : t('request');
-      pushToast(
-        a.good
-          ? { tone: 'good', text: t('{rule} auto-blocked {name} (+{points})', { rule: a.rule.id, name, points: a.points }) }
-          : { tone: 'bad', text: t('{rule} blocked a real customer: {request} ({points})', { rule: a.rule.id, request: `${a.req.method.plain} ${a.req.path.plain}`, points: a.points }) },
-      );
-    }
     for (const p of run.drainPings()) {
       sfx.ping();
       pushToast({ tone: 'ping', who: t(WHO[p.who]), text: p.text }, 5000);
@@ -140,6 +134,26 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   };
 
   const fraction = Math.max(0, Math.min(1, requestLeft.current / run.seconds));
+
+  /** Leave a rule hit and deal the next request. */
+  const nextAfterAuto = () => {
+    if (run.phase !== 'auto') return;
+    window.clearTimeout(autoTimer.current);
+    setHeld(false);
+    setFeedback(null);
+    setExplain(false);
+    run.ackAuto();
+    afterAdvance();
+  };
+  const nextRef = useRef(nextAfterAuto);
+  nextRef.current = nextAfterAuto;
+
+  /** Stop a rule hit from moving on by itself, so the player can look at it. */
+  const hold = () => {
+    if (run.phase !== 'auto' || held) return;
+    window.clearTimeout(autoTimer.current);
+    setHeld(true);
+  };
 
   const commit = (verdict: Verdict, cls?: AttackClass, timedOut = false) => {
     const out = run.judge(verdict, cls, bonusLost.current, timedOut);
@@ -202,6 +216,23 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
     return () => window.clearInterval(h);
   }, [run.phase]);
 
+  // A rule fired on the request on the desk: sound it, stamp it, then move on by itself unless held.
+  const hitId = run.phase === 'auto' ? run.current?.id : undefined;
+  useEffect(() => {
+    const hit = run.autoHit;
+    if (!hitId || !hit) return;
+    if (hit.good) {
+      sfx.zap();
+      sfx.block();
+      buzz(25);
+    } else {
+      sfx.wrong();
+      buzz([60, 60, 60]);
+    }
+    autoTimer.current = window.setTimeout(() => nextRef.current(), hit.good ? AUTO_MS.good : AUTO_MS.bad);
+    return () => window.clearTimeout(autoTimer.current);
+  }, [hitId]);
+
   useEffect(() => () => window.clearTimeout(stampTimer.current), []);
 
   useEffect(() => {
@@ -211,6 +242,13 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   // Keyboard: A allow, B block, 1-9/0 classes, U undo, Esc closes.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (run.phase === 'auto') {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight' || e.key.toLowerCase() === 'n') {
+          e.preventDefault();
+          nextAfterAuto();
+        }
+        return;
+      }
       if (run.phase !== 'request') return;
       const k = e.key.toLowerCase();
       if (stamp) {
@@ -233,6 +271,7 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   });
 
   const onPointerDown = (e: PointerEvent) => {
+    if (run.phase === 'auto') return hold();
     if (stamp || classifier) return;
     dragStart.current = { x: e.clientX, y: e.clientY, active: false };
   };
@@ -309,6 +348,8 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
   }
 
   const req = run.current!;
+  const auto = run.phase === 'auto' ? run.autoHit! : null;
+  const autoName = auto?.req.truth.cls ? t(CLASSES[auto.req.truth.cls].short) : t('request');
   const classes = [...run.cfg.classes, 'policy' as AttackClass];
   const swipeHint = drag > 30 ? 'allow' : drag < -30 ? 'block' : '';
 
@@ -336,11 +377,34 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
             {run.streak}🔥{run.multiplier > 1 ? ` ×${run.multiplier}` : ''}
           </span>
         </div>
-        <div class={`timer ${fraction < 0.25 ? 'low' : ''}`}>
-          <i style={{ width: `${fraction * 100}%` }} />
-        </div>
-        <button class={`status ${feedback ? `fb-${feedback.kind}` : ''} ${explain ? 'open' : ''}`} onClick={() => setExplain(!explain)} disabled={!feedback}>
-          {feedback ? (
+        {auto ? (
+          <div class={`timer auto ${auto.good ? '' : 'low'} ${held ? 'held' : ''}`}>
+            <i key={req.id} style={{ animationDuration: `${auto.good ? AUTO_MS.good : AUTO_MS.bad}ms` }} />
+          </div>
+        ) : (
+          <div class={`timer ${fraction < 0.25 ? 'low' : ''}`}>
+            <i style={{ width: `${fraction * 100}%` }} />
+          </div>
+        )}
+        <button
+          class={`status ${auto ? (auto.good ? 'fb-tp open' : 'fb-fp open') : feedback ? `fb-${feedback.kind}` : ''} ${explain && !auto ? 'open' : ''}`}
+          onClick={() => setExplain(!explain)}
+          disabled={!feedback || !!auto}
+        >
+          {auto ? (
+            <>
+              <span class="status-line">
+                <span class="prompt">&gt;</span>{' '}
+                {auto.good ? t('{rule} auto-blocked {name}', { rule: auto.rule.id, name: autoName }) : t('Collateral: {rule} blocked a real customer', { rule: auto.rule.id })}
+                <b>{auto.points > 0 ? `+${auto.points}` : auto.points}</b>
+              </span>
+              <span class="status-why">
+                {auto.good
+                  ? t('Your rule caught it, so it counts toward the quota.')
+                  : t('Legit traffic matched your rule. Remove it, or live with the angry customers.')}
+              </span>
+            </>
+          ) : feedback ? (
             <>
               <span class="status-line">
                 <span class="prompt">&gt;</span> {feedback.title}
@@ -404,8 +468,26 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
           setDrag(0);
         }}
       >
-        <div class="card" key={req.id} style={drag ? { transform: `translateX(${drag}px) rotate(${drag / 40}deg)` } : undefined}>
-          <RequestCard req={req} cfg={run.cfg} onCost={cost} />
+        <div class={`card ${auto ? (auto.good ? 'auto-good' : 'auto-bad') : ''}`} key={req.id} style={drag ? { transform: `translateX(${drag}px) rotate(${drag / 40}deg)` } : undefined}>
+          {auto && (
+            <div class="rule-fired">
+              <b>⚡ {t('{rule} fired', { rule: auto.rule.id })}</b> <span>{describeRule(auto.rule)}</span>
+              <span class="muted">{held ? t('held. tap Next when ready') : t('tap the card to hold')}</span>
+            </div>
+          )}
+          <RequestCard
+            req={req}
+            cfg={run.cfg}
+            onCost={auto ? undefined : cost}
+            hits={auto ? matchedFields(auto.rule, req) : undefined}
+            rateHit={auto?.rule.target === 'rate'}
+          />
+          {auto && (
+            <div class={`stamp stamp-block ${auto.good ? '' : 'stamp-collateral'}`}>
+              403 {auto.rule.id}
+              {!auto.good && <small>{t('collateral')}</small>}
+            </div>
+          )}
           {stamp && <div class={`stamp stamp-${stamp.verdict}`}>{stamp.verdict === 'allow' ? '200 OK' : `403 ${stamp.cls ? t(CLASSES[stamp.cls].short) : ''}`}</div>}
         </div>
       </section>
@@ -433,7 +515,25 @@ export function Game({ difficulty, seed, haptics, onExit, onRetry }: Props) {
       )}
 
       <footer class="verdicts">
-        {stamp ? (
+        {auto ? (
+          <>
+            {!auto.good && run.rules.includes(auto.rule) && (
+              <button
+                class="btn verdict block"
+                onClick={() => {
+                  run.removeRule(auto.rule.id);
+                  sfx.undo();
+                  nextAfterAuto();
+                }}
+              >
+                {t('Remove {rule}', { rule: auto.rule.id })}
+              </button>
+            )}
+            <button class="btn verdict next" onClick={nextAfterAuto}>
+              {t('Next')} ▸
+            </button>
+          </>
+        ) : stamp ? (
           <button class="btn verdict undo" onClick={undo}>
             ↶ {t('Undo')}
           </button>
